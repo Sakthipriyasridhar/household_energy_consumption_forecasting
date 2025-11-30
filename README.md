@@ -16,7 +16,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Provides **12-month consumption forecasts** with 85%+ accuracy (R² > 0.85)
    - Incorporates seasonal patterns, historical trends, and temporal dependencies
 
-   ![Forecasting Interface](images/forecast.png.png)
+   ![Forecasting Interface](images/forecaste.png.png)
 
 ### 2. **Interactive Energy Survey**
    - Comprehensive data collection on household appliances and usage patterns
