@@ -145,9 +145,9 @@ household-energy-forecasting/
 ├── runtime.txt                  # Python version specification
 ├── README.md                    # Project documentation
 └── pages/
-    ├── 1_AI_Forecasting.py      # Machine learning predictions module
-    ├── 2_Survey_Calculator.py   # Energy consumption survey module
-    └── 3_Optimization.py        # Savings recommendations module
+    ├── forecasting.py           # Machine learning predictions module
+    ├── survey.py                # Energy consumption survey module
+    └── optimization.py          # Savings recommendations module
 ```
 
 ---
