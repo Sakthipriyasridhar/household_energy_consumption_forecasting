@@ -53,7 +53,7 @@ with main_col1:
     - Upload historical data
     """)
     if st.button("Start Forecasting", key="forecast_btn", use_container_width=True):
-        st.switch_page("pages/forecasting.py")
+        st.switch_page("pages/forecast.py")
 
 with main_col2:
     st.markdown("### 📋 Energy Survey")
@@ -102,4 +102,5 @@ if survey_completed:
 
 # Footer
 st.markdown("---")
+
 st.markdown("💡 **Tip:** Complete the Energy Survey first to unlock personalized optimization recommendations")
