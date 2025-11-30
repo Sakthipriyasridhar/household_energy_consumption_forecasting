@@ -4,7 +4,7 @@
 
 This project presents a **cloud-based household electricity consumption forecasting system** that leverages **machine learning algorithms** to predict future energy usage and provide personalized optimization recommendations. The platform enables households to forecast their electricity consumption, analyze current usage patterns, and identify cost-saving opportunities through appliance optimization and solar energy integration.
 
-![Main Dashboard](https://via.placeholder.com/800x400/4CAF50/FFFFFF?text=Main+Dashboard+Showing+Navigation+and+Overview)
+![Main Dashboard](maindashboard.png.png)
 *Main application dashboard with intuitive navigation between forecasting, survey, and optimization modules*
 
 ---
@@ -16,7 +16,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Provides **12-month consumption forecasts** with 85%+ accuracy (R² > 0.85)
    - Incorporates seasonal patterns, historical trends, and temporal dependencies
 
-   ![Forecasting Interface](https://via.placeholder.com/800x400/FF9800/FFFFFF?text=AI+Forecasting+with+Consumption+Charts+and+Metrics)
+   ![Forecasting Interface](forecast.png.png)
 
 ### 2. **Interactive Energy Survey**
    - Comprehensive data collection on household appliances and usage patterns
@@ -24,7 +24,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Seasonal adjustment for accurate consumption profiling
    - 15+ appliance types with power ratings and usage patterns
 
-   ![Survey Interface](https://via.placeholder.com/800x400/2196F3/FFFFFF?text=Energy+Survey+with+Appliance+Configuration)
+   ![Survey Interface](survey.png.png)
 
 ### 3. **Personalized Optimization Recommendations**
    - **Appliance-specific efficiency improvements**
@@ -33,7 +33,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Cost-saving calculations with ROI projections
    - Government subsidy integration (PM Surya Ghar scheme)
 
-   ![Optimization Dashboard](https://via.placeholder.com/800x400/795548/FFFFFF?text=Optimization+Recommendations+with+Savings)
+   ![Optimization Dashboard](optimization.png.png)
 
 ### 4. **Solar Integration Analysis**
    - **Roof area-based generation potential**
@@ -41,7 +41,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - **Payback period and ROI analysis**
    - Monthly savings projections and export income calculations
 
-   ![Solar Analysis](https://via.placeholder.com/800x400/9C27B0/FFFFFF?text=Solar+Feasibility+Analysis)
+
 
 ### 5. **Real-time Analytics & Visualization**
    - Interactive consumption trend charts
@@ -101,7 +101,7 @@ The system integrates:
 - **Appliance-specific savings** identified for maximum impact
 - **Quick win opportunities** with immediate savings potential
 
-![Performance Metrics](https://via.placeholder.com/800x400/4CAF50/FFFFFF?text=Model+Performance+and+Savings+Metrics)
+![Performance Metrics](model.png.png)
 
 ---
 
