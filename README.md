@@ -4,7 +4,7 @@
 
 This project presents a **cloud-based household electricity consumption forecasting system** that leverages **machine learning algorithms** to predict future energy usage and provide personalized optimization recommendations. The platform enables households to forecast their electricity consumption, analyze current usage patterns, and identify cost-saving opportunities through appliance optimization and solar energy integration.
 
-![Main Dashboard](maindashboard.png.png)
+![Main Dashboard](images/maindashboard.png.png)
 *Main application dashboard with intuitive navigation between forecasting, survey, and optimization modules*
 
 ---
@@ -16,7 +16,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Provides **12-month consumption forecasts** with 85%+ accuracy (R² > 0.85)
    - Incorporates seasonal patterns, historical trends, and temporal dependencies
 
-   ![Forecasting Interface](forecast.png.png)
+   ![Forecasting Interface](images/forecast.png.png)
 
 ### 2. **Interactive Energy Survey**
    - Comprehensive data collection on household appliances and usage patterns
@@ -24,7 +24,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Seasonal adjustment for accurate consumption profiling
    - 15+ appliance types with power ratings and usage patterns
 
-   ![Survey Interface](survey.png.png)
+   ![Survey Interface](images/survey.png.png)
 
 ### 3. **Personalized Optimization Recommendations**
    - **Appliance-specific efficiency improvements**
@@ -33,7 +33,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Cost-saving calculations with ROI projections
    - Government subsidy integration (PM Surya Ghar scheme)
 
-   ![Optimization Dashboard](optimization.png.png)
+   ![Optimization Dashboard](images/optimization.png.png)
 
 ### 4. **Solar Integration Analysis**
    - **Roof area-based generation potential**
@@ -48,6 +48,7 @@ This project presents a **cloud-based household electricity consumption forecast
    - Bill comparison analytics
    - Savings impact visualization
    - Exportable reports and action plans
+ ![Visualization Dashboard](images/personalized.png.png)
 
 ---
 
@@ -101,7 +102,7 @@ The system integrates:
 - **Appliance-specific savings** identified for maximum impact
 - **Quick win opportunities** with immediate savings potential
 
-![Performance Metrics](model.png.png)
+![Performance Metrics](images/model.png.png)
 
 ---
 
