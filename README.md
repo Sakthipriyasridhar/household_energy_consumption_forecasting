@@ -54,7 +54,7 @@ This project presents a **cloud-based household electricity consumption forecast
 
 ## Architecture
 
-![System Architecture](https://via.placeholder.com/800x400/607D8B/FFFFFF?text=Three-Tier+System+Architecture)
+![System Architecture](images/Architecture.png)
 
 The system integrates:
 - **Frontend**: Streamlit web application for user interaction
@@ -132,6 +132,7 @@ The system integrates:
 4. **Analyze Solar Potential**: Evaluate renewable energy integration feasibility
 5. **Download Action Plan**: Get implementable optimization strategy
 
+![Workfloe](images/workflow.png)
 
 
 ---
