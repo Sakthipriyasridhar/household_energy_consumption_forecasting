@@ -108,7 +108,7 @@ The system integrates:
 ## How to Use
 
 ### Access the Live Application
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://your-app-link.streamlit.app/)
+[![Streamlit App]([https://householdenergyconsumptionforecasting-tqvrrpxyo9pbxod6geyusf.streamlit.app/)
 
 ### Run Locally
 1. Clone the repository:
@@ -131,7 +131,7 @@ The system integrates:
 4. **Analyze Solar Potential**: Evaluate renewable energy integration feasibility
 5. **Download Action Plan**: Get implementable optimization strategy
 
-![Complete Workflow](https://via.placeholder.com/800x400/009688/FFFFFF?text=End-to-End+User+Workflow+from+Data+Input+to+Optimization)
+
 
 ---
 
@@ -185,7 +185,7 @@ household-energy-forecasting/
 - **Tariff Optimization** algorithms for cost minimization
 - **Behavioral Pattern Analysis** for personalized recommendations
 
-![Future Roadmap](https://via.placeholder.com/800x400/3F51B5/FFFFFF?text=Future+Enhancements+and+Development+Roadmap)
+
 
 ---
 
@@ -226,14 +226,13 @@ household-energy-forecasting/
 - **User Engagement**: High interaction rates across all modules
 - **Accuracy Satisfaction**: 90%+ user confidence in predictions
 
-![Final Results](https://via.placeholder.com/800x400/8BC34A/FFFFFF?text=Final+Optimization+Results+and+Action+Plan)
+
 
 ---
 
 ## Team & Development
 
 **Developer**: Sakthipriya S  
-**Domain**: Energy Analytics & Machine Learning  
 **Platform**: Streamlit Cloud Deployment  
 **Focus**: Residential Energy Optimization
 
@@ -264,16 +263,7 @@ household-energy-forecasting/
 ## 💬 Feedback & Support
 
 For questions, suggestions, or technical support:
-- **Open an Issue**: [GitHub Issues](https://github.com/yourusername/household-energy-forecasting/issues)
-- **Contact Developer**: [Email](mailto:your-email@domain.com)
-- **Documentation**: [Project Wiki](https://github.com/yourusername/household-energy-forecasting/wiki)
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
-
----
+- **Open an Issue**: [GitHub Issues]([https://github.com/yourusername/household-energy-forecasting/issues](https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting))
+- **Contact Developer**: [Email](sakthipriyasridhar122003@gmail.com)
 
 *Empowering households with AI-driven energy insights for sustainable living and significant cost savings through machine learning and practical optimization strategies.*
