@@ -122,7 +122,7 @@ The system integrates:
    ```
 3. Run the application:
    ```bash
-   streamlit run Main_Page.py
+   streamlit run main.py
    ```
 
 ### Application Navigation Workflow
@@ -168,29 +168,6 @@ household-energy-forecasting/
 - **Comprehensive Reporting**: Detailed savings analysis and action plans
 - **Mobile-Responsive Design**: Accessible across all devices
 
----
-
-## Future Enhancements
-
-### Planned Features
-- **Real-time Smart Meter Integration**: Live consumption data feeds
-- **Mobile Application**: On-the-go energy monitoring and alerts
-- **Community Benchmarking**: Compare with similar households
-- **Multi-State Expansion**: Support for different tariff structures across India
-- **Advanced Analytics**: Deep learning models for improved accuracy
-- **Weather Integration**: Climate-based consumption adjustments
-
-### Research & Development
-- **Anomaly Detection** for identifying appliance malfunctions
-- **Predictive Maintenance** alerts for electrical equipment
-- **Energy Storage Optimization** for solar users
-- **Tariff Optimization** algorithms for cost minimization
-- **Behavioral Pattern Analysis** for personalized recommendations
-
-
-
----
-
 ## Impact & Applications
 
 ### For Households
@@ -231,18 +208,9 @@ household-energy-forecasting/
 
 
 ---
-
-## Team & Development
-
-**Developer**: Sakthipriya S  
+**Developer**: Sakthipriya S L
 **Platform**: Streamlit Cloud Deployment  
 **Focus**: Residential Energy Optimization
-
-### Development Timeline
-- **Phase 1**: Core forecasting algorithms and survey module (Completed)
-- **Phase 2**: Optimization engine and solar analysis (Completed) 
-- **Phase 3**: Deployment and performance optimization (Completed)
-- **Phase 4**: Advanced features and scalability (Planned)
 
 ---
 
@@ -256,10 +224,9 @@ household-energy-forecasting/
 
 ### Energy Data Standards
 - Appliance Power Consumption Standards (BEE ratings)
-- Solar Generation Potential Data (NASA and regional sources)
 - TNEB Electricity Slab Rates (2024 structure)
 - Household Consumption Patterns (Regional studies)
-
+- Power COnsumptiion(SRLDC)
 ---
 
 ## 💬 Feedback & Support
