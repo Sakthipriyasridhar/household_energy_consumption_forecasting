@@ -108,12 +108,12 @@ The system integrates:
 ## How to Use
 
 ### Access the Live Application
-[![Streamlit App]([https://householdenergyconsumptionforecasting-tqvrrpxyo9pbxod6geyusf.streamlit.app/)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://householdenergyconsumptionforecasting-tqvrrpxyo9pbxod6geyusf.streamlit.app/)
 
 ### Run Locally
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/household-energy-forecasting.git
+   git clone (https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting).git
    ```
 2. Install dependencies:
    ```bash
