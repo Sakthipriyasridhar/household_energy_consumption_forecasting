@@ -1,106 +1,85 @@
 import streamlit as st
+from streamlit_option_menu import option_menu
+import config
+from modules import dashboard, survey, forecasting, optimization, solar
 
+# Page Configuration
 st.set_page_config(
-    page_title="Household Energy Analysis",
-    page_icon="🏠",
-    layout="wide"
+    page_title="Energy Forecaster",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-st.title(" Household Electricity Consumption Forecasting")
-st.markdown("### Your Complete Energy Analysis Solution")
+# Custom CSS Injection
+def inject_css():
+    with open("assets/style.css", "r") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# Check if user has completed survey
-survey_completed = 'user_data' in st.session_state
+# Initialize Session State
+def init_session_state():
+    if "user_data" not in st.session_state:
+        st.session_state.user_data = {}
+    if "survey_completed" not in st.session_state:
+        st.session_state.survey_completed = False
+    if "forecast_data" not in st.session_state:
+        st.session_state.forecast_data = None
 
-# Progress tracker
-st.subheader(" Recommended Workflow")
-col1, col2, col3 = st.columns(3)
+# Main App
+def main():
+    # Inject custom CSS
+    inject_css()
+    
+    # Initialize session state
+    init_session_state()
+    
+    # Sidebar Navigation
+    with st.sidebar:
+        st.image("assets/images/logo.png", width=150)  # Add your logo
+        
+        selected = option_menu(
+            menu_title="Energy Optimizer AI",
+            options=["Dashboard", "Energy Survey", "AI Forecast", "Optimization", "Solar Analysis", "Reports"],
+            icons=["house", "clipboard-data", "graph-up", "lightbulb", "sun", "file-earmark-text"],
+            menu_icon="lightning-charge",
+            default_index=0,
+            styles={
+                "container": {"padding": "5px", "background-color": config.THEME["background"]},
+                "icon": {"color": config.THEME["primary"], "font-size": "18px"},
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "5px"},
+                "nav-link-selected": {"background-color": config.THEME["primary"]},
+            }
+        )
+        
+        # User Progress Indicator
+        if st.session_state.survey_completed:
+            st.success("✅ Survey Completed")
+        if st.session_state.forecast_data:
+            st.info("📊 Forecast Generated")
+        
+        # Quick Stats in Sidebar
+        st.divider()
+        if st.session_state.user_data.get("monthly_consumption"):
+            st.metric(
+                "Current Monthly Cost",
+                f"₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}",
+                help="Based on your survey data"
+            )
+    
+    # Page Routing
+    if selected == "Dashboard":
+        dashboard.show()
+    elif selected == "Energy Survey":
+        survey.show()
+    elif selected == "AI Forecast":
+        forecasting.show()
+    elif selected == "Optimization":
+        optimization.show()
+    elif selected == "Solar Analysis":
+        solar.show()
+    elif selected == "Reports":
+        st.title("📄 Reports & Export")
+        # Add reports module
 
-with col1:
-    st.info(" **1. AI Forecasting**")
-    st.write("Predict future consumption")
-
-with col2:
-    if survey_completed:
-        st.success(" **2. Energy Survey**")
-        st.write("Survey completed!")
-    else:
-        st.info(" **2. Energy Survey**")
-        st.write("Start here to calculate your current bill")
-
-with col3:
-    if survey_completed:
-        st.success(" **3. Optimization**")
-        st.write("Get personalized recommendations")
-    else:
-        st.warning(" **3. Optimization**")
-        st.write("Complete survey first")
-
-
-
-# Main navigation cards
-st.markdown("---")
-st.subheader("🚀 Get Started")
-
-main_col1, main_col2, main_col3 = st.columns(3)
-
-with main_col1:
-    st.markdown("### 🔮 AI Forecasting")
-    st.write("""
-    - Future bill predictions
-    - Machine learning models
-    - Seasonal trend analysis
-    - Upload historical data
-    """)
-    if st.button("Start Forecasting", key="forecast_btn", use_container_width=True):
-        st.switch_page("pages/forecast.py")
-
-with main_col2:
-    st.markdown("### 📋 Energy Survey")
-    st.write("""
-    - Calculate current electricity bill
-    - Input appliance usage patterns
-    - TNEB slab rate calculation
-    - Daily consumption breakdown
-    """)
-    if st.button("Start Survey", key="survey_btn", use_container_width=True):
-        st.switch_page("pages/survey.py")
-
-with main_col3:
-    st.markdown("### 💰 Optimization")
-    st.write("""
-    - Personalized savings recommendations
-    - Solar panel potential analysis
-    - Appliance-specific tips
-    - Bill reduction strategies
-    """)
-    if survey_completed:
-        if st.button("View Recommendations", key="opt_btn", use_container_width=True):
-            st.switch_page("pages/optimization.py")
-    else:
-        st.button("Complete Survey First", key="opt_disabled", disabled=True, use_container_width=True)
-
-
-
-# Quick stats if survey completed
-if survey_completed:
-    st.markdown("---")
-    st.subheader("📊 Your Current Energy Profile")
-    user_data = st.session_state.user_data
-
-    stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
-
-    with stat_col1:
-        st.metric("Monthly Consumption", f"{user_data['total_units']:.0f} kWh")
-    with stat_col2:
-        st.metric("Current Bill", f"₹{user_data['current_bill']:.0f}")
-    with stat_col3:
-        st.metric("Season", user_data['season'])
-    with stat_col4:
-        efficiency = "High" if user_data['total_units'] < 200 else "Medium" if user_data['total_units'] < 350 else "Low"
-        st.metric("Efficiency", efficiency)
-
-# Footer
-st.markdown("---")
-
-st.markdown("💡 **Tip:** Complete the Energy Survey first to unlock personalized optimization recommendations")
+if __name__ == "__main__":
+    main()
