@@ -67,19 +67,17 @@ def main():
             )
     
     # Page Routing
-    if selected == "Dashboard":
+    if selected == "dashboard":
         dashboard.show()
-    elif selected == "Energy Survey":
+    elif selected == "survey":
         survey.show()
-    elif selected == "AI Forecast":
+    elif selected == "forecast":
         forecasting.show()
-    elif selected == "Optimization":
+    elif selected == "optimization":
         optimization.show()
-    elif selected == "Solar Analysis":
-        solar.show()
-    elif selected == "Reports":
-        st.title("📄 Reports & Export")
+
         # Add reports module
 
 if __name__ == "__main__":
     main()
+
