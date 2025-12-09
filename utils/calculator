@@ -1,0 +1,62 @@
+import config
+
+def calculate_monthly_bill(total_kwh):
+    """Calculate monthly electricity bill based on TNEB slab rates"""
+    bill_amount = config.TNEB_RATES["fixed_charges"]
+    
+    remaining_kwh = total_kwh
+    
+    for slab in config.TNEB_RATES["slabs"]:
+        slab_min, slab_max = slab["range"]
+        rate = slab["rate"]
+        
+        if remaining_kwh <= 0:
+            break
+        
+        if slab_max == float('inf'):
+            # Last slab
+            slab_units = remaining_kwh
+        else:
+            slab_units = min(remaining_kwh, slab_max - slab_min)
+        
+        if slab_units > 0:
+            bill_amount += slab_units * rate
+            remaining_kwh -= slab_units
+    
+    return bill_amount
+
+def calculate_solar_potential(roof_area_sqft, location):
+    """Calculate solar generation potential"""
+    # Solar insolation map for Tamil Nadu (kWh/m²/day)
+    location_insolation = {
+        "Chennai": 5.4,
+        "Coimbatore": 5.2,
+        "Madurai": 5.5,
+        "Trichy": 5.3,
+        "Salem": 5.1,
+        "Other": 5.0
+    }
+    
+    insolation = location_insolation.get(location, 5.0)
+    
+    # Convert roof area to m²
+    roof_area_m2 = roof_area_sqft * 0.0929
+    
+    # Assume 15% of roof can be used for solar
+    usable_area = roof_area_m2 * 0.15
+    
+    # Solar panel efficiency (typical 18-22%)
+    efficiency = 0.20
+    
+    # Daily generation (kWh)
+    daily_generation = usable_area * insolation * efficiency
+    
+    # Monthly generation
+    monthly_generation = daily_generation * 30
+    
+    return {
+        "daily_kwh": round(daily_generation, 1),
+        "monthly_kwh": round(monthly_generation, 1),
+        "annual_kwh": round(monthly_generation * 12, 1),
+        "usable_area_m2": round(usable_area, 1)
+    }
