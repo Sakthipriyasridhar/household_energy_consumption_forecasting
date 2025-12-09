@@ -1,0 +1,758 @@
+"""
+Advanced Visualization Module for Energy Optimizer AI
+Contains all chart generation functions using Plotly
+"""
+
+import plotly.graph_objects as go
+import plotly.express as px
+import pandas as pd
+import numpy as np
+from typing import List, Dict, Any, Optional
+import config
+
+class EnergyVisualizer:
+    """Main class for creating energy-related visualizations"""
+    
+    def __init__(self, theme_colors: Optional[Dict] = None):
+        self.theme = theme_colors or config.THEME
+        
+    def create_consumption_forecast_chart(self, 
+                                        months: List[str],
+                                        predictions: List[float],
+                                        lower_bound: Optional[List[float]] = None,
+                                        upper_bound: Optional[List[float]] = None,
+                                        historical: Optional[List[float]] = None,
+                                        title: str = "Energy Consumption Forecast") -> go.Figure:
+        """
+        Create a professional forecast chart with confidence intervals
+        
+        Args:
+            months: List of month names
+            predictions: Predicted consumption values
+            lower_bound: Lower confidence bound (optional)
+            upper_bound: Upper confidence bound (optional)
+            historical: Historical data points (optional)
+            title: Chart title
+            
+        Returns:
+            Plotly Figure object
+        """
+        fig = go.Figure()
+        
+        # Add confidence interval as filled area
+        if lower_bound and upper_bound:
+            fig.add_trace(go.Scatter(
+                x=months + months[::-1],
+                y=upper_bound + lower_bound[::-1],
+                fill='toself',
+                fillcolor=f'rgba({self.hex_to_rgb(self.theme["primary"])}, 0.15)',
+                line_color='rgba(255,255,255,0)',
+                name='85% Confidence Interval',
+                showlegend=True,
+                hoverinfo='skip'
+            ))
+        
+        # Add forecast line
+        fig.add_trace(go.Scatter(
+            x=months,
+            y=predictions,
+            mode='lines+markers',
+            name='AI Forecast',
+            line=dict(color=self.theme["primary"], width=3),
+            marker=dict(size=8, color=self.theme["primary"]),
+            hovertemplate='<b>%{x}</b><br>Predicted: %{y:.0f} kWh<extra></extra>'
+        ))
+        
+        # Add historical data if provided
+        if historical and len(historical) > 0:
+            hist_months = months[:len(historical)]
+            fig.add_trace(go.Scatter(
+                x=hist_months,
+                y=historical,
+                mode='markers',
+                name='Historical',
+                marker=dict(size=10, color=self.theme["secondary"], symbol='diamond'),
+                hovertemplate='<b>%{x}</b><br>Actual: %{y:.0f} kWh<extra></extra>'
+            ))
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(
+                text=title,
+                font=dict(size=20, color=self.theme["text"])
+            ),
+            xaxis=dict(
+                title="Month",
+                tickangle=45,
+                gridcolor='rgba(0,0,0,0.1)',
+                showgrid=True
+            ),
+            yaxis=dict(
+                title="Consumption (kWh)",
+                gridcolor='rgba(0,0,0,0.1)',
+                showgrid=True
+            ),
+            hovermode="x unified",
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(family="Arial, sans-serif"),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            height=500,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
+        
+        return fig
+    
+    def create_appliance_breakdown_chart(self, 
+                                       appliance_data: List[Dict],
+                                       chart_type: str = 'pie',
+                                       top_n: int = 10) -> go.Figure:
+        """
+        Create appliance consumption breakdown chart
+        
+        Args:
+            appliance_data: List of dicts with 'appliance' and 'consumption_kwh'
+            chart_type: 'pie', 'bar', or 'treemap'
+            top_n: Show only top N appliances
+            
+        Returns:
+            Plotly Figure object
+        """
+        # Convert to DataFrame and sort
+        df = pd.DataFrame(appliance_data)
+        df = df.sort_values('consumption_kwh', ascending=False)
+        
+        if len(df) > top_n:
+            # Group others
+            top_df = df.head(top_n - 1)
+            others_sum = df.iloc[top_n - 1:]['consumption_kwh'].sum()
+            
+            others_row = pd.DataFrame({
+                'appliance': ['Other Appliances'],
+                'consumption_kwh': [others_sum],
+                'category': ['Others']
+            })
+            
+            df = pd.concat([top_df, others_row])
+        
+        if chart_type == 'pie':
+            fig = px.pie(
+                df,
+                values='consumption_kwh',
+                names='appliance',
+                hole=0.4,
+                color_discrete_sequence=px.colors.sequential.Blues_r,
+                title="Appliance Consumption Breakdown"
+            )
+            
+            fig.update_traces(
+                textposition='inside',
+                textinfo='percent+label',
+                hovertemplate='<b>%{label}</b><br>%{value:.1f} kWh (%{percent})<extra></extra>'
+            )
+            
+        elif chart_type == 'bar':
+            fig = px.bar(
+                df,
+                x='appliance',
+                y='consumption_kwh',
+                color='consumption_kwh',
+                color_continuous_scale='Viridis',
+                title="Top Energy Consuming Appliances"
+            )
+            
+            fig.update_layout(
+                xaxis_title="Appliance",
+                yaxis_title="Monthly Consumption (kWh)",
+                coloraxis_showscale=False
+            )
+            
+            # Add value labels on bars
+            fig.update_traces(
+                texttemplate='%{y:.1f}',
+                textposition='outside',
+                hovertemplate='<b>%{x}</b><br>Consumption: %{y:.1f} kWh<extra></extra>'
+            )
+            
+        elif chart_type == 'treemap':
+            fig = px.treemap(
+                df,
+                path=[px.Constant("All Appliances"), 'category', 'appliance'],
+                values='consumption_kwh',
+                color='consumption_kwh',
+                color_continuous_scale='Blues',
+                title="Appliance Consumption Hierarchy"
+            )
+            
+            fig.update_traces(
+                textinfo="label+value+percent parent",
+                hovertemplate='<b>%{label}</b><br>Consumption: %{value:.1f} kWh<extra></extra>'
+            )
+        
+        # Common layout updates
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            font=dict(family="Arial, sans-serif"),
+            height=450
+        )
+        
+        return fig
+    
+    def create_cost_savings_chart(self,
+                                current_cost: float,
+                                optimized_cost: float,
+                                savings_breakdown: Dict[str, float],
+                                title: str = "Cost Savings Analysis") -> go.Figure:
+        """
+        Create cost savings comparison chart
+        
+        Args:
+            current_cost: Current monthly cost
+            optimized_cost: Optimized monthly cost
+            savings_breakdown: Dict of savings by category
+            title: Chart title
+            
+        Returns:
+            Plotly Figure object
+        """
+        # Create data for bar chart
+        categories = ['Current Cost', 'Optimized Cost', 'Total Savings']
+        values = [current_cost, optimized_cost, current_cost - optimized_cost]
+        colors = [self.theme["secondary"], self.theme["success"], self.theme["accent"]]
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Bar(
+            x=categories,
+            y=values,
+            marker_color=colors,
+            text=[f'₹{v:,.0f}' for v in values],
+            textposition='auto',
+            hovertemplate='<b>%{x}</b><br>Amount: ₹%{y:,.0f}<extra></extra>'
+        ))
+        
+        # Add savings breakdown as pie chart
+        if savings_breakdown:
+            # Create subplot
+            from plotly.subplots import make_subplots
+            fig = make_subplots(
+                rows=1, cols=2,
+                column_widths=[0.6, 0.4],
+                specs=[[{"type": "bar"}, {"type": "pie"}]],
+                subplot_titles=("Cost Comparison", "Savings Breakdown")
+            )
+            
+            # Add bar chart
+            fig.add_trace(go.Bar(
+                x=categories,
+                y=values,
+                marker_color=colors,
+                text=[f'₹{v:,.0f}' for v in values],
+                textposition='auto',
+                name="Cost",
+                hovertemplate='<b>%{x}</b><br>Amount: ₹%{y:,.0f}<extra></extra>'
+            ), row=1, col=1)
+            
+            # Add pie chart
+            savings_labels = list(savings_breakdown.keys())
+            savings_values = list(savings_breakdown.values())
+            
+            fig.add_trace(go.Pie(
+                labels=savings_labels,
+                values=savings_values,
+                hole=0.3,
+                marker_colors=px.colors.qualitative.Set3,
+                name="Savings",
+                hovertemplate='<b>%{label}</b><br>Savings: ₹%{value:,.0f}<extra></extra>'
+            ), row=1, col=2)
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=18)),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            showlegend=False,
+            height=400,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
+        
+        if savings_breakdown:
+            fig.update_layout(
+                xaxis_title="",
+                yaxis_title="Amount (₹)"
+            )
+        
+        return fig
+    
+    def create_seasonal_pattern_chart(self,
+                                    months: List[str],
+                                    trend: List[float],
+                                    seasonal: List[float],
+                                    residual: List[float],
+                                    title: str = "Seasonal Decomposition") -> go.Figure:
+        """
+        Create seasonal decomposition chart
+        
+        Args:
+            months: Month labels
+            trend: Trend component
+            seasonal: Seasonal component
+            residual: Residual component
+            title: Chart title
+            
+        Returns:
+            Plotly Figure object
+        """
+        from plotly.subplots import make_subplots
+        
+        # Create subplots
+        fig = make_subplots(
+            rows=3, cols=1,
+            subplot_titles=("Trend", "Seasonality", "Residual"),
+            vertical_spacing=0.1,
+            shared_xaxes=True
+        )
+        
+        # Add trend component
+        fig.add_trace(go.Scatter(
+            x=months,
+            y=trend,
+            mode='lines',
+            name='Trend',
+            line=dict(color=self.theme["primary"], width=2),
+            hovertemplate='<b>%{x}</b><br>Trend: %{y:.1f} kWh<extra></extra>'
+        ), row=1, col=1)
+        
+        # Add seasonal component
+        fig.add_trace(go.Scatter(
+            x=months,
+            y=seasonal,
+            mode='lines',
+            name='Seasonal',
+            line=dict(color=self.theme["secondary"], width=2),
+            fill='tozeroy',
+            fillcolor=f'rgba({self.hex_to_rgb(self.theme["secondary"])}, 0.2)',
+            hovertemplate='<b>%{x}</b><br>Seasonal: %{y:.1f} kWh<extra></extra>'
+        ), row=2, col=1)
+        
+        # Add residual component
+        fig.add_trace(go.Scatter(
+            x=months,
+            y=residual,
+            mode='lines+markers',
+            name='Residual',
+            line=dict(color=self.theme["accent"], width=1),
+            marker=dict(size=4, color=self.theme["accent"]),
+            hovertemplate='<b>%{x}</b><br>Residual: %{y:.1f} kWh<extra></extra>'
+        ), row=3, col=1)
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=20)),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            showlegend=False,
+            height=600,
+            margin=dict(l=50, r=50, t=100, b=50)
+        )
+        
+        # Update y-axis titles
+        fig.update_yaxes(title_text="Trend (kWh)", row=1, col=1)
+        fig.update_yaxes(title_text="Seasonal (kWh)", row=2, col=1)
+        fig.update_yaxes(title_text="Residual (kWh)", row=3, col=1)
+        fig.update_xaxes(title_text="Month", row=3, col=1)
+        
+        return fig
+    
+    def create_solar_roi_chart(self,
+                             investment: float,
+                             monthly_savings: float,
+                             years: int = 10,
+                             title: str = "Solar ROI Analysis") -> go.Figure:
+        """
+        Create solar ROI and payback period chart
+        
+        Args:
+            investment: Initial investment amount
+            monthly_savings: Monthly savings from solar
+            years: Number of years to project
+            title: Chart title
+            
+        Returns:
+            Plotly Figure object
+        """
+        # Calculate cumulative savings
+        months = list(range(years * 12 + 1))
+        cumulative_savings = []
+        cumulative_costs = []
+        
+        for month in months:
+            savings = monthly_savings * month
+            cumulative_savings.append(savings)
+            cumulative_costs.append(investment - savings)
+        
+        # Find payback period (when savings >= investment)
+        payback_month = next((i for i, s in enumerate(cumulative_savings) if s >= investment), None)
+        payback_years = payback_month / 12 if payback_month else None
+        
+        fig = go.Figure()
+        
+        # Add cumulative savings line
+        fig.add_trace(go.Scatter(
+            x=[m/12 for m in months],
+            y=cumulative_savings,
+            mode='lines',
+            name='Cumulative Savings',
+            line=dict(color=self.theme["success"], width=3),
+            hovertemplate='Year %{x:.1f}<br>Savings: ₹%{y:,.0f}<extra></extra>'
+        ))
+        
+        # Add investment line
+        fig.add_trace(go.Scatter(
+            x=[0, years],
+            y=[investment, investment],
+            mode='lines',
+            name='Initial Investment',
+            line=dict(color=self.theme["secondary"], width=2, dash='dash'),
+            hovertemplate='Investment: ₹%{y:,.0f}<extra></extra>'
+        ))
+        
+        # Add payback point marker
+        if payback_years:
+            fig.add_trace(go.Scatter(
+                x=[payback_years],
+                y=[investment],
+                mode='markers+text',
+                marker=dict(size=15, color=self.theme["accent"], symbol='star'),
+                text=[f'Payback: {payback_years:.1f} years'],
+                textposition="top center",
+                name='Payback Period',
+                showlegend=False,
+                hovertemplate='Payback Period: %{x:.1f} years<extra></extra>'
+            ))
+        
+        # Add area for net profit
+        if payback_years:
+            profit_months = [m for m in months if m/12 >= payback_years]
+            if profit_months:
+                profit_years = [m/12 for m in profit_months]
+                profit_savings = [cumulative_savings[m] for m in profit_months]
+                
+                fig.add_trace(go.Scatter(
+                    x=profit_years + [profit_years[-1], profit_years[0]],
+                    y=profit_savings + [investment, investment],
+                    fill='toself',
+                    fillcolor=f'rgba({self.hex_to_rgb(self.theme["success"])}, 0.2)',
+                    line=dict(width=0),
+                    name='Net Profit Zone',
+                    hovertemplate='Year %{x:.1f}<br>Profit: ₹%{y:,.0f}<extra></extra>'
+                ))
+        
+        # Update layout
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=20)),
+            xaxis=dict(
+                title="Years",
+                gridcolor='rgba(0,0,0,0.1)',
+                dtick=1
+            ),
+            yaxis=dict(
+                title="Amount (₹)",
+                gridcolor='rgba(0,0,0,0.1)',
+                tickprefix='₹'
+            ),
+            hovermode="x unified",
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            height=500,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
+        
+        return fig
+    
+    def create_usage_pattern_heatmap(self,
+                                   hourly_usage: List[float],
+                                   days: List[str] = None,
+                                   title: str = "Weekly Usage Pattern") -> go.Figure:
+        """
+        Create heatmap for usage patterns
+        
+        Args:
+            hourly_usage: List of 168 values (24 hours × 7 days)
+            days: Day labels (default: Monday-Sunday)
+            title: Chart title
+            
+        Returns:
+            Plotly Figure object
+        """
+        if days is None:
+            days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        
+        # Reshape to 7x24
+        if len(hourly_usage) == 168:
+            usage_matrix = np.array(hourly_usage).reshape(7, 24)
+        else:
+            # Create sample data
+            usage_matrix = np.random.rand(7, 24) * 2
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=usage_matrix,
+            x=list(range(24)),
+            y=days,
+            colorscale='Viridis',
+            colorbar=dict(title="kW"),
+            hovertemplate='Day: %{y}<br>Hour: %{x}:00<br>Usage: %{z:.2f} kW<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=20)),
+            xaxis=dict(
+                title="Hour of Day",
+                dtick=2,
+                tickmode='array',
+                tickvals=list(range(0, 24, 2))
+            ),
+            yaxis=dict(title="Day of Week"),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            height=400,
+            margin=dict(l=50, r=50, t=80, b=50)
+        )
+        
+        return fig
+    
+    def create_comparison_gauge(self,
+                              current_value: float,
+                              optimized_value: float,
+                              title: str = "Efficiency Improvement",
+                              unit: str = "kWh") -> go.Figure:
+        """
+        Create gauge chart for comparison
+        
+        Args:
+            current_value: Current consumption/cost
+            optimized_value: Optimized consumption/cost
+            title: Chart title
+            unit: Unit of measurement
+            
+        Returns:
+            Plotly Figure object
+        """
+        # Calculate improvement percentage
+        improvement = ((current_value - optimized_value) / current_value) * 100
+        
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=optimized_value,
+            delta={'reference': current_value, 'relative': True, 'valueformat': '.0%'},
+            gauge={
+                'axis': {'range': [None, current_value * 1.2], 'tickwidth': 1},
+                'bar': {'color': self.theme["success"]},
+                'steps': [
+                    {'range': [0, current_value * 0.5], 'color': "lightgray"},
+                    {'range': [current_value * 0.5, current_value * 0.8], 'color': "gray"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': current_value
+                }
+            },
+            title={'text': f"{title}<br><span style='font-size:0.8em;color:gray'>Current: {current_value:.1f} {unit}</span>"},
+            domain={'x': [0, 1], 'y': [0, 1]}
+        ))
+        
+        fig.update_layout(
+            height=300,
+            margin=dict(l=30, r=30, t=80, b=30),
+            font=dict(color=self.theme["text"], family="Arial")
+        )
+        
+        return fig
+    
+    def create_timeline_chart(self,
+                            events: List[Dict[str, Any]],
+                            title: str = "Implementation Timeline") -> go.Figure:
+        """
+        Create timeline chart for optimization recommendations
+        
+        Args:
+            events: List of dicts with 'task', 'start', 'end', 'savings'
+            title: Chart title
+            
+        Returns:
+            Plotly Figure object
+        """
+        fig = go.Figure()
+        
+        for i, event in enumerate(events):
+            fig.add_trace(go.Scatter(
+                x=[event['start'], event['end']],
+                y=[event['task'], event['task']],
+                mode='lines+markers',
+                line=dict(width=10, color=self.get_color_gradient(i, len(events))),
+                marker=dict(size=15, symbol='circle'),
+                name=event['task'],
+                text=[f"Savings: ₹{event.get('savings', 0):,.0f}/month"],
+                hovertemplate='<b>%{y}</b><br>%{text}<extra></extra>'
+            ))
+        
+        fig.update_layout(
+            title=dict(text=title, font=dict(size=20)),
+            xaxis=dict(
+                title="Timeline",
+                gridcolor='rgba(0,0,0,0.1)',
+                showgrid=True
+            ),
+            yaxis=dict(
+                title="Tasks",
+                autorange="reversed",
+                gridcolor='rgba(0,0,0,0.1)',
+                showgrid=True
+            ),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            showlegend=False,
+            height=400,
+            margin=dict(l=100, r=50, t=80, b=50)
+        )
+        
+        return fig
+    
+    # Helper methods
+    @staticmethod
+    def hex_to_rgb(hex_color: str, alpha: float = 1.0) -> str:
+        """Convert hex color to rgba string"""
+        hex_color = hex_color.lstrip('#')
+        r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return f"{r}, {g}, {b}, {alpha}"
+    
+    def get_color_gradient(self, index: int, total: int) -> str:
+        """Get gradient color based on index"""
+        # Create gradient from primary to secondary
+        r1, g1, b1 = self.hex_to_rgb(self.theme["primary"]).split(', ')[:3]
+        r2, g2, b2 = self.hex_to_rgb(self.theme["secondary"]).split(', ')[:3]
+        
+        r = int(r1) + (int(r2) - int(r1)) * index / total
+        g = int(g1) + (int(g2) - int(g1)) * index / total
+        b = int(b1) + (int(b2) - int(b1)) * index / total
+        
+        return f'rgb({int(r)}, {int(g)}, {int(b)})'
+    
+    def create_dashboard_summary_chart(self, metrics: Dict[str, float]) -> go.Figure:
+        """
+        Create dashboard summary chart with multiple metrics
+        
+        Args:
+            metrics: Dictionary of metric name to value
+            
+        Returns:
+            Plotly Figure object
+        """
+        from plotly.subplots import make_subplots
+        
+        # Create subplot grid
+        n_metrics = len(metrics)
+        cols = min(3, n_metrics)
+        rows = (n_metrics + cols - 1) // cols
+        
+        fig = make_subplots(
+            rows=rows, cols=cols,
+            specs=[[{'type': 'indicator'} for _ in range(cols)] for _ in range(rows)],
+            vertical_spacing=0.15,
+            horizontal_spacing=0.1
+        )
+        
+        metrics_list = list(metrics.items())
+        colors = [self.theme["primary"], self.theme["secondary"], 
+                 self.theme["success"], self.theme["accent"]]
+        
+        for idx, (name, value) in enumerate(metrics_list):
+            row = idx // cols + 1
+            col = idx % cols + 1
+            
+            fig.add_trace(go.Indicator(
+                mode="number",
+                value=value,
+                title=dict(text=name, font=dict(size=14)),
+                number=dict(
+                    font=dict(size=24, color=colors[idx % len(colors)]),
+                    prefix="₹" if "cost" in name.lower() or "saving" in name.lower() else "",
+                    suffix=" kWh" if "consumption" in name.lower() else "%" if "saving" in name.lower() else ""
+                ),
+                domain={'row': row-1, 'column': col-1}
+            ), row=row, col=col)
+        
+        fig.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            height=300 * rows,
+            margin=dict(l=20, r=20, t=50, b=20)
+        )
+        
+        return fig
+
+
+# Quick utility functions for common visualizations
+def create_simple_bar_chart(labels: List[str], values: List[float], 
+                          title: str = "", color: str = None) -> go.Figure:
+    """Quick bar chart creation"""
+    color = color or config.THEME["primary"]
+    
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            marker_color=color,
+            text=values,
+            textposition='auto',
+        )
+    ])
+    
+    fig.update_layout(
+        title=title,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=400
+    )
+    
+    return fig
+
+
+def create_simple_line_chart(x: List, y: List, title: str = "", 
+                           color: str = None) -> go.Figure:
+    """Quick line chart creation"""
+    color = color or config.THEME["primary"]
+    
+    fig = go.Figure(data=[
+        go.Scatter(
+            x=x,
+            y=y,
+            mode='lines+markers',
+            line=dict(color=color, width=2),
+            marker=dict(size=8, color=color)
+        )
+    ])
+    
+    fig.update_layout(
+        title=title,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        height=400
+    )
+    
+    return fig
