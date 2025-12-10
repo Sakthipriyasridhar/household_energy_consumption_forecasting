@@ -1,25 +1,16 @@
 # Theme Configuration
 THEME = {
-    "primary": "#2E86AB",       # Blue - Energy/Technology
-    "secondary": "#A23B72",     # Purple - Innovation
-    "accent": "#F18F01",        # Orange - Action/Warning
-    "success": "#73AB84",       # Green - Savings/Success
-    "background": "#F5F7FA",    # Light background
-    "card": "#FFFFFF",          # Card background
-    "text": "#2D3748",          # Dark text
-    "text_light": "#718096",    # Light text
+    "primary": "#2E86AB",       # Blue
+    "secondary": "#A23B72",     # Purple
+    "accent": "#F18F01",        # Orange
+    "success": "#73AB84",       # Green
+    "background": "#F5F7FA",
+    "card": "#FFFFFF",
+    "text": "#2D3748",
+    "text_light": "#718096",
 }
 
-# App Configuration
-APP_CONFIG = {
-    "name": "Energy Optimizer AI",
-    "description": "ML-Powered Household Energy Management",
-    "version": "2.0",
-    "author": "Sakthipriya S L",
-    "streamlit_cloud_url": "https://householdenergyconsumptionforecasting-tqvrrpxyo9pbxod6geyusf.streamlit.app"
-}
-
-# TNEB Rate Configuration (Tamil Nadu)
+# TNEB Rates (Tamil Nadu)
 TNEB_RATES = {
     "slabs": [
         {"range": (0, 100), "rate": 0},
@@ -33,7 +24,7 @@ TNEB_RATES = {
     "fixed_charges": 50
 }
 
-# Common Appliances Database
+# Appliances Database
 APPLIANCES = {
     "Refrigerator": {"power_w": 150, "daily_hours": 24, "category": "Essential"},
     "Air Conditioner": {"power_w": 1500, "daily_hours": 8, "category": "Cooling"},
