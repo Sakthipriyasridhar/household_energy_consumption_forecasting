@@ -1,12 +1,31 @@
-import config
+"""
+Utility functions for calculations
+"""
 
-def calculate_monthly_bill(total_kwh):
-    """Calculate monthly electricity bill based on TNEB slab rates"""
-    bill_amount = config.TNEB_RATES["fixed_charges"]
+def calculate_monthly_bill(total_kwh, tneb_rates=None):
+    """
+    Calculate monthly electricity bill based on TNEB slab rates
+    """
+    if tneb_rates is None:
+        # Default TNEB rates
+        slabs = [
+            {"range": (0, 100), "rate": 0},
+            {"range": (101, 200), "rate": 2.25},
+            {"range": (201, 400), "rate": 4.50},
+            {"range": (401, 500), "rate": 6.00},
+            {"range": (501, 600), "rate": 8.00},
+            {"range": (601, 800), "rate": 9.00},
+            {"range": (801, float('inf')), "rate": 10.00}
+        ]
+        fixed_charges = 50
+    else:
+        slabs = tneb_rates.get("slabs", [])
+        fixed_charges = tneb_rates.get("fixed_charges", 0)
     
+    bill_amount = fixed_charges
     remaining_kwh = total_kwh
     
-    for slab in config.TNEB_RATES["slabs"]:
+    for slab in slabs:
         slab_min, slab_max = slab["range"]
         rate = slab["rate"]
         
@@ -25,9 +44,11 @@ def calculate_monthly_bill(total_kwh):
     
     return bill_amount
 
-def calculate_solar_potential(roof_area_sqft, location):
-    """Calculate solar generation potential"""
-    # Solar insolation map for Tamil Nadu (kWh/m²/day)
+def calculate_solar_potential(roof_area_sqft, location, monthly_consumption):
+    """
+    Calculate solar generation potential and savings
+    """
+    # Solar insolation (kWh/m²/day) for Tamil Nadu
     location_insolation = {
         "Chennai": 5.4,
         "Coimbatore": 5.2,
@@ -42,21 +63,37 @@ def calculate_solar_potential(roof_area_sqft, location):
     # Convert roof area to m²
     roof_area_m2 = roof_area_sqft * 0.0929
     
-    # Assume 15% of roof can be used for solar
-    usable_area = roof_area_m2 * 0.15
+    # Assume 70% of roof is usable for solar
+    usable_area = roof_area_m2 * 0.7
     
-    # Solar panel efficiency (typical 18-22%)
-    efficiency = 0.20
+    # System size calculation (150W per m²)
+    system_size_kw = usable_area * 0.15
     
     # Daily generation (kWh)
-    daily_generation = usable_area * insolation * efficiency
+    daily_generation = system_size_kw * insolation * 0.85  # 85% efficiency
     
     # Monthly generation
     monthly_generation = daily_generation * 30
     
+    # Savings calculation
+    self_consumption = min(monthly_consumption, monthly_generation * 0.7)  # 70% self-use
+    export = max(0, monthly_generation * 0.3)  # 30% export
+    
+    # TNEB rates: ₹8/kWh import, ₹3/kWh export
+    monthly_savings = (self_consumption * 8) + (export * 3)
+    
+    # Investment (₹50,000 per kW)
+    investment = system_size_kw * 50000
+    
+    # Subsidy (40% for <3kW, 20% for 3-10kW)
+    subsidy_rate = 0.4 if system_size_kw <= 3 else 0.2
+    subsidy = investment * subsidy_rate
+    
     return {
-        "daily_kwh": round(daily_generation, 1),
-        "monthly_kwh": round(monthly_generation, 1),
-        "annual_kwh": round(monthly_generation * 12, 1),
-        "usable_area_m2": round(usable_area, 1)
+        "system_size_kw": round(system_size_kw, 2),
+        "monthly_generation_kwh": round(monthly_generation, 0),
+        "monthly_savings": round(monthly_savings, 0),
+        "investment": round(investment, 0),
+        "subsidy": round(subsidy, 0),
+        "net_investment": round(investment - subsidy, 0)
     }
