@@ -17,14 +17,14 @@ st.subheader("🏠 Your Solar Potential")
 col1, col2 = st.columns(2)
 
 with col1:
-roof_area = st.number_input(
+    roof_area = st.number_input(
     "Available Roof Area (sq.ft)", 
     min_value=100.0,  # Use float instead of int
     max_value=10000.0,  # Add max_value if needed
     value=1000.0,  # Add a default value
     step=100.0,  # Make step a float
-    help="Approximately 30% of total roof area is usable"
-)
+    help="Approximately 30% of total roof area is usable")
+
 with col2:
     solar_budget = st.select_slider("Budget Range",
                                    options=["₹1-2 Lakhs", "₹2-3 Lakhs", "₹3-5 Lakhs", "₹5-10 Lakhs"],
