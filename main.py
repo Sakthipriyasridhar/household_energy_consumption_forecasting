@@ -69,21 +69,22 @@ def main():
     st.sidebar.caption("Powered by ML | 85%+ Accuracy")
     
     # Main Content based on selection
-    if page == "🏠 Dashboard":
-        show_dashboard()
-    elif page == "📋 Energy Survey":
-        # Will be handled by pages/2_Survey.py
-        st.write("")  # Placeholder - actual content in pages
-    elif page == "🤖 AI Forecast":
-        # Will be handled by pages/3_Forecast.py
-        st.write("")
-    elif page == "💡 Optimization":
-        # Will be handled by pages/4_Optimization.py
-        st.write("")
-    elif page == "☀️ Solar Analysis":
-        # Will be handled by pages/5_Solar.py
-        st.write("")
+     st.sidebar.title("Navigation")
 
+     if st.sidebar.button("🏠 Dashboard"):
+         st.switch_page("pages/1_Dashboard.py")
+    
+     if st.sidebar.button("📋 Energy Survey"):
+         st.switch_page("pages/2_Survey.py")
+    
+     if st.sidebar.button("📊 AI Forecast"):
+         st.switch_page("pages/3_Forecast.py")
+    
+     if st.sidebar.button("⚡ Optimization"):
+         st.switch_page("pages/4_Optimization.py")
+    
+     if st.sidebar.button("☀️ Solar Analysis"):
+         st.switch_page("pages/5_Solar.py")
 def show_dashboard():
     """Dashboard Page"""
     st.markdown('<h1 class="main-title">⚡ Energy Optimizer AI</h1>', unsafe_allow_html=True)
@@ -154,6 +155,7 @@ def show_dashboard():
 
 if __name__ == "__main__":
     main()
+
 
 
 
