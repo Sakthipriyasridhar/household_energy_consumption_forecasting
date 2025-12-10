@@ -69,12 +69,13 @@ def main():
     st.sidebar.title("⚡ Energy Optimizer AI")
     
     # Page selection - using radio for main navigation
-    page_options = ["🏠 Dashboard", "📋 Energy Survey", "📊 AI Forecast", "⚡ Optimization", "☀️ Solar Analysis"]
+    page_options = ["🏠 Dashboard", "📊 Load Data", "📋 Energy Survey", "📊 AI Forecast", "⚡ Optimization", "☀️ Solar Analysis"]
     selected_page = st.sidebar.radio("Navigate to", page_options, index=0)
     
     # Map page names to actual page files
     page_mapping = {
         "🏠 Dashboard": "Dashboard",  # Current page
+        "📊 Load Data": "pages/data_Loader.py",
         "📋 Energy Survey": "pages/survey.py",
         "📊 AI Forecast": "pages/forecast.py", 
         "⚡ Optimization": "pages/optimization.py",
@@ -105,6 +106,7 @@ def main():
     with st.sidebar.expander("✨ Features"):
         st.write("""
         - 🤖 AI Forecasting (85%+ accuracy)
+        - 📊 Data Uploading
         - 📋 Smart Energy Survey
         - 💡 Personalized Optimization Tips
         - ☀️ Solar ROI Analysis
@@ -147,17 +149,21 @@ def show_dashboard():
     # Quick Start Section
     st.subheader("🚀 Quick Start")
     
-    quick_col1, quick_col2, quick_col3 = st.columns(3)
+    quick_col1, quick_col2, quick_col3, quick_col4 = st.columns(4)
     
     with quick_col1:
+        if st.button("📝 Start Data Uploading", use_container_width=True, key="load_data_btn"):
+            st.switch_page("pages/data_loader.py")
+        
+    with quick_col2:
         if st.button("📝 Start Energy Survey", use_container_width=True, key="survey_btn"):
             st.switch_page("pages/survey.py")
     
-    with quick_col2:
+    with quick_col3:
         if st.button("📊 Generate Forecast", use_container_width=True, key="forecast_btn"):
             st.switch_page("pages/forecast.py")
     
-    with quick_col3:
+    with quick_col4:
         if st.button("💡 Get Tips", use_container_width=True, key="tips_btn"):
             st.switch_page("pages/optimization.py")
     
@@ -167,12 +173,13 @@ def show_dashboard():
     st.subheader("✨ Key Features")
     
     features = [
-        {"icon": "🤖", "title": "AI Forecasting", "desc": "12-month predictions with 85%+ accuracy", "page": "pages/3_Forecast.py"},
-        {"icon": "📋", "title": "Smart Survey", "desc": "5-min comprehensive energy assessment", "page": "pages/2_Survey.py"},
-        {"icon": "💡", "title": "Personalized Tips", "desc": "Actionable savings recommendations", "page": "pages/4_Optimization.py"},
-        {"icon": "☀️", "title": "Solar Analysis", "desc": "ROI and payback period calculations", "page": "pages/5_Solar.py"},
-        {"icon": "📊", "title": "Real Analytics", "desc": "Interactive charts and insights", "page": "pages/3_Forecast.py"},
-        {"icon": "💰", "title": "Cost Savings", "desc": "15-40% reduction potential", "page": "pages/4_Optimization.py"}
+        {"icon": "📝", "title": "Uploading Data", "desc": "Upload & Clean your data here", "page": "pages/data_loader.py"},
+        {"icon": "🤖", "title": "AI Forecasting", "desc": "12-month predictions with 85%+ accuracy", "page": "pages/forecast.py"},
+        {"icon": "📋", "title": "Smart Survey", "desc": "5-min comprehensive energy assessment", "page": "pages/survey.py"},
+        {"icon": "💡", "title": "Personalized Tips", "desc": "Actionable savings recommendations", "page": "pages/optimization.py"},
+        {"icon": "☀️", "title": "Solar Analysis", "desc": "ROI and payback period calculations", "page": "pages/solar.py"},
+        {"icon": "📊", "title": "Real Analytics", "desc": "Interactive charts and insights", "page": "pages/forecast.py"},
+        {"icon": "💰", "title": "Cost Savings", "desc": "15-40% reduction potential", "page": "pages/optimization.py"}
     ]
     
     # Create 3 columns for features
@@ -259,3 +266,4 @@ def show_dashboard():
 
 if __name__ == "__main__":
     main()
+
