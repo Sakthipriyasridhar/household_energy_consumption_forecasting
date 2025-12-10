@@ -198,3 +198,24 @@ with col3:
 
 # Update progress
 progress.progress((st.session_state.survey_step + 1) / len(steps))
+
+# At the end of survey.py, instead of automatic redirect:
+if st.button("✅ Complete Survey & Continue", type="primary"):
+    st.session_state.survey_completed = True
+    st.session_state.user_data = survey_data  # Store survey responses
+    
+    st.success("✅ Survey completed successfully!")
+    
+    # Show options instead of forcing redirect
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📊 Go to Forecasting", use_container_width=True):
+            st.switch_page("pages/data_loader.py")
+    
+    with col2:
+        if st.button("🏠 Back to Dashboard", use_container_width=True):
+            st.switch_page("main.py")
+    
+    # Don't automatically redirect
+    # st.switch_page("pages/4_Forecast.py")  # REMOVE THIS LINE
