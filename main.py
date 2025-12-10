@@ -75,10 +75,10 @@ def main():
     # Map page names to actual page files
     page_mapping = {
         "🏠 Dashboard": "Dashboard",  # Current page
-        "📋 Energy Survey": "pages/2_Survey.py",
-        "📊 AI Forecast": "pages/3_Forecast.py", 
-        "⚡ Optimization": "pages/4_Optimization.py",
-        "☀️ Solar Analysis": "pages/5_Solar.py"
+        "📋 Energy Survey": "pages/survey.py",
+        "📊 AI Forecast": "pages/forecast.py", 
+        "⚡ Optimization": "pages/optimization.py",
+        "☀️ Solar Analysis": "pages/solar.py"
     }
     
     # User Progress
@@ -151,15 +151,15 @@ def show_dashboard():
     
     with quick_col1:
         if st.button("📝 Start Energy Survey", use_container_width=True, key="survey_btn"):
-            st.switch_page("pages/2_Survey.py")
+            st.switch_page("pages/survey.py")
     
     with quick_col2:
         if st.button("📊 Generate Forecast", use_container_width=True, key="forecast_btn"):
-            st.switch_page("pages/3_Forecast.py")
+            st.switch_page("pages/forecast.py")
     
     with quick_col3:
         if st.button("💡 Get Tips", use_container_width=True, key="tips_btn"):
-            st.switch_page("pages/4_Optimization.py")
+            st.switch_page("pages/optimization.py")
     
     st.divider()
     
@@ -254,8 +254,9 @@ def show_dashboard():
     st.divider()
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.caption("© 2024 Energy Optimizer AI | ML-Powered Energy Management Platform")
+        st.caption("Energy Forecaster Using AI | ML-Powered Energy Management Platform")
         st.caption("Data Privacy Assured | 256-bit Encryption")
 
 if __name__ == "__main__":
     main()
+
