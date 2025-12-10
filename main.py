@@ -92,18 +92,15 @@ def show_dashboard():
     st.divider()
     
     # Hero Section
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(4)
     
     with col1:
         st.metric("Avg. Savings", "32%", "↑ 5%")
     
     with col2:
         st.metric("Forecast Accuracy", "85.2%", "↑ 2.1%")
-    
+        
     with col3:
-        st.metric("Users Helped", "1,200+", "↑ 150")
-    
-    with col4:
         st.metric("CO₂ Reduced", "12.5 tons", "Monthly")
     
     st.divider()
@@ -115,15 +112,15 @@ def show_dashboard():
     
     with col1:
         if st.button("📝 Start Energy Survey", use_container_width=True):
-            st.switch_page("pages/2_Survey.py")
+            st.switch_page("pages/survey.py")
     
     with col2:
         if st.button("📊 View Sample Forecast", use_container_width=True):
-            st.switch_page("pages/3_Forecast.py")
+            st.switch_page("pages/forecast.py")
     
     with col3:
         if st.button("💡 See Optimization Tips", use_container_width=True):
-            st.switch_page("pages/4_Optimization.py")
+            st.switch_page("pages/optimization.py")
     
     st.divider()
     
@@ -153,7 +150,8 @@ def show_dashboard():
     
     # Footer
     st.divider()
-    st.caption("© 2024 Energy Optimizer AI | ML-Powered Energy Management Platform")
+    st.caption("© Energy Forecasting AI | ML-Powered Energy Management Platform")
 
 if __name__ == "__main__":
     main()
+
