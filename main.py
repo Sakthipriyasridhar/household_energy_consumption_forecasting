@@ -1,127 +1,51 @@
 import streamlit as st
 
-# Page Configuration - HIDE default elements
+# Page Configuration
 st.set_page_config(
     page_title="Energy Optimizer AI",
     page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': None
-    }
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS to hide Streamlit branding and default elements
+# Custom CSS
 def load_css():
     css = """
     <style>
-        /* Hide Streamlit default elements */
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        
-        /* Fix sidebar to always be visible */
-        section[data-testid="stSidebar"] {
-            position: fixed !important;
-            height: 100vh !important;
-        }
-        
-        /* Adjust main content area */
-        .main .block-container {
-            padding-left: 5rem;
-        }
-        
-        /* Main title styling */
         .main-title {
             background: linear-gradient(45deg, #2E86AB, #A23B72);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-size: 2.5rem;
             font-weight: 700;
-            margin-top: -1rem;
         }
-        
-        /* Sidebar styling */
         .sidebar .sidebar-content {
-            background: linear-gradient(180deg, #1a1a2e, #16213e);
-            color: white;
-            padding-top: 2rem;
+            background: linear-gradient(180deg, #F5F7FA, #FFFFFF);
         }
-        
-        /* Sidebar title */
-        .sidebar-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 2rem;
-            text-align: center;
-            background: linear-gradient(45deg, #00b4d8, #0077b6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        /* Radio button styling */
-        div[data-testid="stRadio"] > div {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 10px;
-        }
-        
-        div[data-testid="stRadio"] label {
-            color: white !important;
-            font-weight: 500;
-        }
-        
-        /* Card styling */
         .energy-card {
-            background: rgba(255, 255, 255, 0.1);
+            background-color: #f8f9fa;
             padding: 1.5rem;
-            border-radius: 15px;
-            border-left: 4px solid #00b4d8;
+            border-radius: 10px;
+            border-left: 4px solid #2E86AB;
             margin-bottom: 1rem;
-            transition: all 0.3s;
-            backdrop-filter: blur(10px);
+            transition: transform 0.3s;
         }
-        
         .energy-card:hover {
             transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.15);
-            box-shadow: 0 8px 20px rgba(0, 180, 216, 0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-        
-        /* Button styling */
-        .stButton > button {
-            background: linear-gradient(45deg, #00b4d8, #0077b6);
+        .stButton>button {
+            background: linear-gradient(45deg, #2E86AB, #A23B72);
             color: white;
             border: none;
             padding: 0.75rem 1.5rem;
-            border-radius: 10px;
+            border-radius: 8px;
             font-weight: 600;
             transition: all 0.3s;
-            width: 100%;
         }
-        
-        .stButton > button:hover {
+        .stButton>button:hover {
             transform: scale(1.05);
-            box-shadow: 0 4px 15px rgba(0, 180, 216, 0.4);
-        }
-        
-        /* Metric cards */
-        .metric-card {
-            background: linear-gradient(135deg, #1a1a2e, #16213e);
-            padding: 1.5rem;
-            border-radius: 15px;
-            color: white;
-            text-align: center;
-        }
-        
-        /* Progress indicators */
-        .progress-indicator {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 1rem;
-            border-radius: 10px;
-            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(46, 134, 171, 0.3);
         }
     </style>
     """
@@ -135,177 +59,107 @@ def init_session_state():
         st.session_state.user_data = {}
     if "forecast_generated" not in st.session_state:
         st.session_state.forecast_generated = False
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = "🏠 Dashboard"
 
-# Navigation Sidebar Component
-def create_sidebar():
-    """Create permanent sidebar navigation that appears on all pages"""
-    with st.sidebar:
-        # App Logo/Title
-        st.markdown('<h1 class="sidebar-title">⚡ Energy AI</h1>', unsafe_allow_html=True)
-        
-        # Navigation Options - using radio for single selection
-        st.markdown("### 📍 Navigate")
-        page = st.radio(
-            "",
-            ["🏠 Dashboard", "📋 Energy Survey", "📊 AI Forecast", "⚡ Optimization", "☀️ Solar Analysis"],
-            index=["🏠 Dashboard", "📋 Energy Survey", "📊 AI Forecast", "⚡ Optimization", "☀️ Solar Analysis"].index(
-                st.session_state.current_page
-            )
-        )
-        
-        # Update current page in session state
-        st.session_state.current_page = page
-        
-        st.divider()
-        
-        # User Progress Section
-        st.markdown("### 📈 Your Progress")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.session_state.survey_completed:
-                st.success("✅ Survey")
-            else:
-                st.warning("📝 Survey")
-        
-        with col2:
-            if st.session_state.forecast_generated:
-                st.success("✅ Forecast")
-            else:
-                st.info("📊 Forecast")
-        
-        # Quick Stats
-        st.divider()
-        st.markdown("### 💰 Current Stats")
-        
-        if st.session_state.user_data.get("monthly_cost"):
-            st.metric(
-                "Monthly Bill",
-                f"₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}"
-            )
-        else:
-            st.info("Complete survey to see your stats")
-        
-        # Features Preview
-        st.divider()
-        with st.expander("✨ Features Overview", expanded=False):
-            st.write("""
-            - 🤖 **AI Forecasting** - 85%+ accuracy
-            - 📋 **Smart Survey** - 5-min assessment
-            - 💡 **Optimization** - Personalized tips
-            - ☀️ **Solar Analysis** - ROI calculator
-            - 📊 **Analytics** - Interactive charts
-            """)
-        
-        # Footer in sidebar
-        st.divider()
-        st.caption("🔋 Powered by Advanced ML")
-        st.caption("v1.0 | Secure & Private")
-
-# Main App Logic
+# Main App
 def main():
     load_css()
     init_session_state()
     
-    # Create permanent sidebar
-    create_sidebar()
+    # Sidebar Navigation
+    st.sidebar.title("⚡ Energy Optimizer AI")
     
-    # Get current page from session state
-    current_page = st.session_state.current_page
+    # Page selection - using radio for main navigation
+    page_options = ["🏠 Dashboard", "📋 Energy Survey", "📊 AI Forecast", "⚡ Optimization", "☀️ Solar Analysis"]
+    selected_page = st.sidebar.radio("Navigate to", page_options, index=0)
     
     # Map page names to actual page files
     page_mapping = {
-        "🏠 Dashboard": "Dashboard",
+        "🏠 Dashboard": "Dashboard",  # Current page
         "📋 Energy Survey": "pages/survey.py",
         "📊 AI Forecast": "pages/forecast.py", 
         "⚡ Optimization": "pages/optimization.py",
         "☀️ Solar Analysis": "pages/solar.py"
     }
     
-    # Handle navigation - if not on Dashboard, switch page
-    if current_page != "🏠 Dashboard":
-        target_page = page_mapping[current_page]
-        # Add a small delay for better UX
-        with st.spinner(f"Loading {current_page[2:]}..."):
-            st.switch_page(target_page)
+    # User Progress
+    st.sidebar.divider()
+    if st.session_state.survey_completed:
+        st.sidebar.success("✅ Survey Completed")
+    else:
+        st.sidebar.warning("📝 Survey Pending")
+    
+    # Quick Stats
+    st.sidebar.divider()
+    st.sidebar.subheader("📈 Quick Stats")
+    
+    if st.session_state.user_data.get("monthly_cost"):
+        st.sidebar.metric(
+            "Current Bill",
+            f"₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}"
+        )
+    else:
+        st.sidebar.info("Complete survey to see your stats")
+    
+    # Features summary
+    st.sidebar.divider()
+    with st.sidebar.expander("✨ Features"):
+        st.write("""
+        - 🤖 AI Forecasting (85%+ accuracy)
+        - 📋 Smart Energy Survey
+        - 💡 Personalized Optimization Tips
+        - ☀️ Solar ROI Analysis
+        - 📊 Interactive Analytics
+        """)
+    
+    st.sidebar.divider()
+    st.sidebar.caption("🔋 Powered by ML | 85%+ Accuracy")
+    
+    # Handle page navigation
+    if selected_page != "🏠 Dashboard":
+        target_page = page_mapping[selected_page]
+        st.info(f"Redirecting to {selected_page[2:]}...")
+        st.switch_page(target_page)
     else:
         # Show Dashboard content
         show_dashboard()
 
 def show_dashboard():
     """Dashboard Page - Home content"""
-    # Main content area
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        st.markdown('<h1 class="main-title">⚡ Energy Optimizer AI</h1>', unsafe_allow_html=True)
-        st.markdown("### ML-Powered Household Energy Management System")
-    
-    with col2:
-        st.write("")  # Spacer
+    st.markdown('<h1 class="main-title">⚡ Energy Optimizer AI</h1>', unsafe_allow_html=True)
+    st.markdown("### ML-Powered Household Energy Management System")
     
     st.divider()
     
     # Hero Section with metrics
-    st.subheader("📊 Dashboard Overview")
+    col1, col2, col3 = st.columns(3)
     
-    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+    with col1:
+        st.metric("Avg. Savings", "32%", "+5% from avg")
     
-    with metric_col1:
-        st.markdown("""
-        <div class="metric-card">
-            <h3>32%</h3>
-            <p>Avg. Savings</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with metric_col2:
-        st.markdown("""
-        <div class="metric-card">
-            <h3>85.2%</h3>
-            <p>Forecast Accuracy</p>
-        </div>
-        """, unsafe_allow_html=True)
+    with col2:
+        st.metric("Forecast Accuracy", "85.2%", "+2.1%")
         
-    with metric_col3:
-        st.markdown("""
-        <div class="metric-card">
-            <h3>12.5T</h3>
-            <p>CO₂ Reduced</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with metric_col4:
-        st.markdown("""
-        <div class="metric-card">
-            <h3>₹2,500</h3>
-            <p>Avg. Monthly Save</p>
-        </div>
-        """, unsafe_allow_html=True)
+    with col3:
+        st.metric("CO₂ Reduced", "12.5 tons", "Monthly avg")
     
     st.divider()
     
-    # Quick Actions Section
-    st.subheader("🚀 Quick Actions")
+    # Quick Start Section
+    st.subheader("🚀 Quick Start")
     
-    action_col1, action_col2, action_col3 = st.columns(3)
+    quick_col1, quick_col2, quick_col3 = st.columns(3)
     
-    with action_col1:
-        if st.button("📝 Start Energy Survey", use_container_width=True, key="survey_action"):
-            st.session_state.current_page = "📋 Energy Survey"
-            st.rerun()
+    with quick_col1:
+        if st.button("📝 Start Energy Survey", use_container_width=True, key="survey_btn"):
+            st.switch_page("pages/survey.py")
     
-    with action_col2:
-        if st.button("📊 Generate Forecast", use_container_width=True, key="forecast_action"):
-            st.session_state.current_page = "📊 AI Forecast"
-            st.rerun()
+    with quick_col2:
+        if st.button("📊 Generate Forecast", use_container_width=True, key="forecast_btn"):
+            st.switch_page("pages/forecast.py")
     
-    with action_col3:
-        if st.button("💡 Get Tips", use_container_width=True, key="tips_action"):
-            st.session_state.current_page = "⚡ Optimization"
-            st.rerun()
+    with quick_col3:
+        if st.button("💡 Get Tips", use_container_width=True, key="tips_btn"):
+            st.switch_page("pages/optimization.py")
     
     st.divider()
     
@@ -313,12 +167,12 @@ def show_dashboard():
     st.subheader("✨ Key Features")
     
     features = [
-        {"icon": "🤖", "title": "AI Forecasting", "desc": "12-month predictions with 85%+ accuracy", "page": "📊 AI Forecast"},
-        {"icon": "📋", "title": "Smart Survey", "desc": "5-min comprehensive energy assessment", "page": "📋 Energy Survey"},
-        {"icon": "💡", "title": "Personalized Tips", "desc": "Actionable savings recommendations", "page": "⚡ Optimization"},
-        {"icon": "☀️", "title": "Solar Analysis", "desc": "ROI and payback period calculations", "page": "☀️ Solar Analysis"},
-        {"icon": "📊", "title": "Real Analytics", "desc": "Interactive charts and insights", "page": "📊 AI Forecast"},
-        {"icon": "💰", "title": "Cost Savings", "desc": "15-40% reduction potential", "page": "⚡ Optimization"}
+        {"icon": "🤖", "title": "AI Forecasting", "desc": "12-month predictions with 85%+ accuracy", "page": "pages/3_Forecast.py"},
+        {"icon": "📋", "title": "Smart Survey", "desc": "5-min comprehensive energy assessment", "page": "pages/2_Survey.py"},
+        {"icon": "💡", "title": "Personalized Tips", "desc": "Actionable savings recommendations", "page": "pages/4_Optimization.py"},
+        {"icon": "☀️", "title": "Solar Analysis", "desc": "ROI and payback period calculations", "page": "pages/5_Solar.py"},
+        {"icon": "📊", "title": "Real Analytics", "desc": "Interactive charts and insights", "page": "pages/3_Forecast.py"},
+        {"icon": "💰", "title": "Cost Savings", "desc": "15-40% reduction potential", "page": "pages/4_Optimization.py"}
     ]
     
     # Create 3 columns for features
@@ -332,77 +186,76 @@ def show_dashboard():
                 card_html = f"""
                 <div class="energy-card">
                     <div style="font-size: 2rem; margin-bottom: 0.5rem;">{feature['icon']}</div>
-                    <h4 style="margin-top: 0; color: white;">{feature['title']}</h4>
-                    <p style="color: #b0b0b0; font-size: 0.9rem;">{feature['desc']}</p>
+                    <h4 style="margin-top: 0;">{feature['title']}</h4>
+                    <p style="color: #666; font-size: 0.9rem;">{feature['desc']}</p>
                 </div>
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
                 
                 # Add a button to go to the feature
                 if st.button(f"Go to {feature['title']}", key=f"feature_btn_{idx}", use_container_width=True):
-                    st.session_state.current_page = feature['page']
-                    st.rerun()
+                    st.switch_page(feature['page'])
     
     st.divider()
     
-    # Recent Activity Section
-    st.subheader("📈 Recent Insights")
+    # Status Section
+    st.subheader("📊 Your Progress")
     
-    insight_tab1, insight_tab2, insight_tab3 = st.tabs(["💡 Tips", "📊 Usage", "🌱 Impact"])
+    progress_col1, progress_col2, progress_col3 = st.columns(3)
+    
+    with progress_col1:
+        if st.session_state.survey_completed:
+            st.success("✅ Survey Completed")
+        else:
+            st.warning("⏳ Survey Pending")
+    
+    with progress_col2:
+        if st.session_state.forecast_generated:
+            st.success("✅ Forecast Ready")
+        else:
+            st.info("📈 Forecast Available")
+    
+    with progress_col3:
+        st.info("⚡ Optimization Ready")
+    
+    # Demo data section
+    st.divider()
+    st.subheader("📈 Sample Insights")
+    
+    insight_tab1, insight_tab2, insight_tab3 = st.tabs(["Savings", "Usage", "Efficiency"])
     
     with insight_tab1:
         st.write("""
-        **This Week's Top Tips:**
-        
-        1. **Switch to LED bulbs** - Save up to 75% on lighting
-        2. **Use smart power strips** - Eliminate phantom loads
-        3. **Optimize AC temperature** - Set to 24°C for 20% savings
-        4. **Run appliances off-peak** - Save 15-20% on time-based rates
+        **Typical Savings Breakdown:**
+        - Lighting: 15-20% savings
+        - Appliances: 20-30% savings  
+        - HVAC: 25-40% savings
+        - Electronics: 10-15% savings
         """)
-        
-        if st.button("View All Tips", key="view_tips"):
-            st.session_state.current_page = "⚡ Optimization"
-            st.rerun()
     
     with insight_tab2:
         st.write("""
-        **Usage Patterns:**
-        
-        - ⚡ **Peak Hours:** 6-10 PM (40% higher rates)
-        - 🏠 **Avg. Monthly Use:** 900-1200 kWh
-        - 🔥 **Top Consumers:** AC (40%), Water Heater (15%), Refrigerator (10%)
-        - 📱 **Standby Power:** 5-10% of total bill
+        **Average Household Usage:**
+        - Monthly: 900-1200 kWh
+        - Peak Hours: 6-10 PM
+        - Highest Consumers: AC, Water Heater, Refrigerator
         """)
-        
-        if st.button("Analyze My Usage", key="analyze_usage"):
-            st.session_state.current_page = "📊 AI Forecast"
-            st.rerun()
     
     with insight_tab3:
         st.write("""
-        **Environmental Impact:**
-        
-        - 🌍 **CO₂ Reduced:** Equivalent to 15 trees planted
-        - 💧 **Water Saved:** 2,500 liters monthly
-        - 🏭 **Clean Energy:** Potential for 40% solar coverage
-        - 📉 **Waste Reduced:** 15% less energy waste
+        **Efficiency Tips:**
+        - Use LED bulbs: Save 75% on lighting
+        - Smart thermostat: Save 10-12% on HVAC
+        - Energy Star appliances: Save 10-50% per device
+        - Solar panels: Reduce bills by 40-70%
         """)
-        
-        if st.button("Calculate My Impact", key="calculate_impact"):
-            st.session_state.current_page = "☀️ Solar Analysis"
-            st.rerun()
     
-    # Footer at bottom
+    # Footer
     st.divider()
-    st.markdown("---")
-    footer_col1, footer_col2, footer_col3 = st.columns([1, 2, 1])
-    with footer_col2:
-        st.markdown("""
-        <div style="text-align: center; color: #666; font-size: 0.9rem;">
-            <p>© 2024 Energy Optimizer AI | Advanced Machine Learning Platform</p>
-            <p>🔒 Your data is encrypted and never shared with third parties</p>
-        </div>
-        """, unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.caption("Electricity Forecaster Using AI | ML-Powered Energy Management Platform")
+        st.caption("Data Privacy Assured | 256-bit Encryption")
 
 if __name__ == "__main__":
     main()
