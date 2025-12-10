@@ -937,7 +937,7 @@ def main():
     if st.session_state.forecast_data is None:
         st.warning("Please load data from the main page first")
         if st.button("Go to Data Loading"):
-            st.switch_page("pages/2_Survey.py")
+            st.switch_page("pages/survey.py")
         return
     
     data = st.session_state.forecast_data
@@ -1046,3 +1046,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
