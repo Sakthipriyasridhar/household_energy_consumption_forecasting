@@ -10,7 +10,7 @@ if not st.session_state.get("survey_completed", False):
     col1, col2 = st.columns([1, 2])
     with col1:
         if st.button("📝 Take Survey Now", type="primary", use_container_width=True):
-            st.switch_page("pages/2_Survey.py")
+            st.switch_page("pages/survey.py")
     
     with col2:
         st.info("The survey takes only 5 minutes and provides personalized recommendations.")
@@ -235,3 +235,4 @@ if st.button("🔄 Get Updated Recommendations", use_container_width=True):
 # Footer
 st.divider()
 st.caption("💡 Tips: Start with high-priority, low-investment items for quick wins")
+
