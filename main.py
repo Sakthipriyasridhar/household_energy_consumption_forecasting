@@ -72,19 +72,15 @@ def main():
     if page == "🏠 Dashboard":
         show_dashboard()
     elif page == "📋 Energy Survey":
-        show_survey()
         # Will be handled by pages/2_Survey.py
         st.write("")  # Placeholder - actual content in pages
     elif page == "🤖 AI Forecast":
-        show_forecast()
         # Will be handled by pages/3_Forecast.py
         st.write("")
     elif page == "💡 Optimization":
-        show_optimization()
         # Will be handled by pages/4_Optimization.py
         st.write("")
     elif page == "☀️ Solar Analysis":
-        show_solar()
         # Will be handled by pages/5_Solar.py
         st.write("")
 
@@ -158,6 +154,7 @@ def show_dashboard():
 
 if __name__ == "__main__":
     main()
+
 
 
 
