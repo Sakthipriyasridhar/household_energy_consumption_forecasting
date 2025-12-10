@@ -9,3 +9,7 @@ python-dotenv
 openpyxl
 xgboost
 lightgbm
+statsmodels 
+seaborn
+python-dateutil
+pytz
