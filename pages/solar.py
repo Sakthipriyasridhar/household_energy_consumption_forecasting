@@ -221,17 +221,15 @@ if st.session_state.get("solar_results"):
     
     # Action Buttons
     st.divider()
-    col1, col2, col3 = st.columns(3)
+    col1, col2= st.columns(2)
+    
+
     
     with col1:
-        if st.button("📞 Get Installer Quotes", use_container_width=True):
-            st.success("Request sent to registered installers!")
-    
-    with col2:
         if st.button("📄 Download Report", use_container_width=True):
             st.success("Report generated for download!")
     
-    with col3:
+    with col2:
         if st.button("🔄 Recalculate", use_container_width=True):
             del st.session_state.solar_results
             st.rerun()
