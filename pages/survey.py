@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import time
+from datetime import time, datetime
+import json
+from io import BytesIO
+import numpy as np
 
 st.set_page_config(page_title="Energy Survey", page_icon="📋", layout="wide")
 
@@ -27,6 +30,13 @@ st.markdown("""
         margin: 10px 0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    .prediction-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -42,7 +52,7 @@ if "survey_data" not in st.session_state:
     st.session_state.survey_data = {}
 
 # Progress Bar
-steps = ["🏠 Household Info", "🔌 Appliances", "🕒 Usage Patterns", "📊 Review"]
+steps = ["🏠 Household Info", "🔌 Appliances", "🕒 Usage Patterns", "📊 Review & Predict"]
 progress_value = (st.session_state.survey_step + 1) / len(steps)
 st.progress(progress_value, text=f"Step {st.session_state.survey_step + 1} of {len(steps)}")
 
@@ -58,6 +68,19 @@ for i, step in enumerate(steps):
             st.markdown(f"{step.split()[1]} ⚪")
 
 st.divider()
+
+# Helper function to serialize datetime objects
+def json_serializer(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, (datetime, pd.Timestamp)):
+        return obj.isoformat()
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 # Step 1: Household Info
 if st.session_state.survey_step == 0:
@@ -77,7 +100,7 @@ if st.session_state.survey_step == 0:
         area = st.slider("📏 Total Area (Square Feet)", 300, 10000, 1200, 100)
         location = st.selectbox("📍 City/Region", 
                                ["Chennai", "Coimbatore", "Madurai", "Trichy", 
-                                "Salem", "Bangalore", "Hyderabad", "Other"])
+                                "Salem", "Bangalore", "Hyderabad", "Mumbai", "Delhi", "Other"])
         construction_year = st.slider("🏗️ Construction Year", 1980, 2024, 2010)
     
     # Store data
@@ -155,7 +178,7 @@ elif st.session_state.survey_step == 1:
                     quantity = st.number_input(
                         "Quantity", 
                         0, 10, 1,
-                        key=f"qty_{appliance['name']}",
+                        key=f"qty_{appliance['name']}_{idx}",
                         help="Number of this appliance"
                     )
                 
@@ -164,7 +187,7 @@ elif st.session_state.survey_step == 1:
                         "Hours/day", 
                         0.0, 24.0, 
                         float(appliance['default_hours']), 0.5,
-                        key=f"hours_{appliance['name']}",
+                        key=f"hours_{appliance['name']}_{idx}",
                         help="Average daily usage"
                     )
                 
@@ -172,7 +195,7 @@ elif st.session_state.survey_step == 1:
                 efficiency = st.selectbox(
                     "Efficiency",
                     appliance['efficiency'],
-                    key=f"eff_{appliance['name']}",
+                    key=f"eff_{appliance['name']}_{idx}",
                     help="Select the efficiency rating"
                 )
                 
@@ -315,14 +338,14 @@ elif st.session_state.survey_step == 2:
         "night_usage": night_usage,
         "ac_months": ac_months,
         "geyser_type": geyser_type,
-        "geyser_hours": geyser_hours if geyser_type != "None" else 0,
+        "geyser_hours": geyser_hours if 'geyser_hours' in locals() and geyser_type != "None" else 0,
         "cooking_fuel": cooking_fuel,
         "automation": automation
     }
 
-# Step 4: Review
+# Step 4: Review with AC Seasonal Prediction
 elif st.session_state.survey_step == 3:
-    st.subheader("📊 Final Review & Insights")
+    st.subheader("📊 Final Review & AC Seasonal Prediction")
     
     # Display Summary
     col1, col2 = st.columns(2)
@@ -376,6 +399,145 @@ elif st.session_state.survey_step == 3:
             </div>
             """, unsafe_allow_html=True)
     
+    # ========== AC SEASONAL PREDICTION ==========
+    st.divider()
+    st.markdown("### ❄️ AC Seasonal Consumption Prediction")
+    
+    if "appliances" in st.session_state.survey_data and "usage" in st.session_state.survey_data:
+        # Find AC appliance data
+        ac_data = None
+        for appliance in st.session_state.survey_data["appliances"]:
+            if "Air Conditioner" in appliance["name"]:
+                ac_data = appliance
+                break
+        
+        if ac_data and ac_data["quantity"] > 0:
+            ac_months = st.session_state.survey_data["usage"].get("ac_months", 6)
+            location = st.session_state.survey_data["household"].get("location", "Chennai")
+            
+            # Monthly temperature data for Indian cities (average max temp in °C)
+            city_temperatures = {
+                "Chennai": [29, 31, 33, 35, 37, 37, 35, 34, 33, 31, 29, 28],
+                "Coimbatore": [29, 31, 33, 34, 33, 31, 30, 30, 30, 29, 28, 28],
+                "Madurai": [30, 32, 34, 36, 37, 36, 35, 34, 33, 31, 29, 29],
+                "Trichy": [30, 32, 34, 36, 37, 37, 35, 34, 33, 31, 29, 29],
+                "Salem": [29, 31, 33, 34, 33, 31, 30, 30, 30, 29, 28, 28],
+                "Bangalore": [27, 29, 31, 32, 31, 28, 27, 27, 27, 27, 26, 26],
+                "Hyderabad": [29, 32, 35, 37, 39, 35, 31, 30, 31, 30, 28, 28],
+                "Mumbai": [30, 30, 32, 33, 33, 32, 30, 29, 30, 32, 33, 31],
+                "Delhi": [21, 24, 30, 36, 39, 38, 35, 33, 33, 32, 27, 22],
+                "Other": [30, 32, 34, 36, 37, 36, 34, 33, 32, 31, 29, 28]
+            }
+            
+            # Get temperature data for the city
+            temps = city_temperatures.get(location, city_temperatures["Other"])
+            
+            # Calculate AC usage factor based on temperature
+            # AC usage increases significantly above 30°C
+            ac_factors = []
+            for temp in temps:
+                if temp > 35:
+                    factor = 1.5  # Very hot
+                elif temp > 32:
+                    factor = 1.3  # Hot
+                elif temp > 30:
+                    factor = 1.1  # Warm
+                elif temp > 28:
+                    factor = 0.8  # Mild
+                elif temp > 25:
+                    factor = 0.5  # Cool
+                else:
+                    factor = 0.3  # Cold
+                ac_factors.append(factor)
+            
+            # Calculate monthly AC consumption
+            months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            
+            base_ac_kwh = ac_data["monthly_kwh"]
+            monthly_ac_consumption = []
+            
+            for i, (month, temp, factor) in enumerate(zip(months, temps, ac_factors)):
+                # Adjust consumption based on temperature and usage months
+                if i < ac_months:
+                    monthly_kwh = base_ac_kwh * factor
+                else:
+                    monthly_kwh = base_ac_kwh * 0.2  # Minimal usage in off-season
+                monthly_ac_consumption.append({
+                    "Month": month,
+                    "Temperature (°C)": temp,
+                    "AC Usage Factor": factor,
+                    "AC Consumption (kWh)": round(monthly_kwh, 1),
+                    "AC Cost (₹)": round(monthly_kwh * unit_rate, 0)
+                })
+            
+            df_ac_prediction = pd.DataFrame(monthly_ac_consumption)
+            
+            # Display prediction
+            col_pred1, col_pred2 = st.columns(2)
+            
+            with col_pred1:
+                st.markdown("#### 📈 AC Consumption Forecast")
+                fig1 = go.Figure()
+                fig1.add_trace(go.Scatter(x=months, y=df_ac_prediction["AC Consumption (kWh)"],
+                                         mode='lines+markers', name='AC Consumption',
+                                         line=dict(color='#FF6B6B', width=3)))
+                fig1.add_trace(go.Scatter(x=months, y=temps,
+                                         mode='lines', name='Temperature',
+                                         yaxis='y2',
+                                         line=dict(color='#4ECDC4', width=2, dash='dash')))
+                
+                fig1.update_layout(
+                    title=f'Monthly AC Consumption Forecast for {location}',
+                    yaxis=dict(title='AC Consumption (kWh)', titlefont=dict(color='#FF6B6B')),
+                    yaxis2=dict(title='Temperature (°C)', titlefont=dict(color='#4ECDC4'),
+                               overlaying='y', side='right'),
+                    hovermode='x unified'
+                )
+                st.plotly_chart(fig1, use_container_width=True)
+            
+            with col_pred2:
+                st.markdown("#### 💰 Seasonal Cost Impact")
+                
+                # Calculate peak season vs off-season
+                peak_months = df_ac_prediction.nlargest(ac_months, "AC Consumption (kWh)")
+                off_months = df_ac_prediction.nsmallest(12 - ac_months, "AC Consumption (kWh)")
+                
+                peak_cost = peak_months["AC Cost (₹)"].sum()
+                off_cost = off_months["AC Cost (₹)"].sum()
+                total_ac_cost = df_ac_prediction["AC Cost (₹)"].sum()
+                
+                st.markdown(f"""
+                <div class='prediction-card'>
+                    <h4>Annual AC Cost Analysis</h4>
+                    <p><b>Peak Season ({ac_months} months):</b> ₹{peak_cost:,.0f}</p>
+                    <p><b>Off-Season ({12-ac_months} months):</b> ₹{off_cost:,.0f}</p>
+                    <p><b>Total Annual AC Cost:</b> ₹{total_ac_cost:,.0f}</p>
+                    <p><small>Location: {location} | AC Type: {ac_data.get('efficiency', 'Standard')}</small></p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # Savings recommendations
+                st.markdown("#### 💡 AC Optimization Tips")
+                if ac_data.get('efficiency') == "Non-inverter":
+                    st.info("⚡ **Switch to Inverter AC:** Save up to 40% on AC electricity costs")
+                if any(temp > 35 for temp in temps):
+                    st.info("🌡️ **Use Smart Thermostat:** Set to 24°C instead of 18°C to save 20%")
+                if peak_cost > 15000:
+                    st.info("🕒 **Peak Hour Management:** Run AC during off-peak hours (10 PM - 6 AM)")
+                
+                # Show data table
+                with st.expander("📋 View Monthly AC Data"):
+                    st.dataframe(df_ac_prediction, use_container_width=True)
+            
+            # Store prediction data
+            st.session_state.survey_data["ac_prediction"] = {
+                "monthly_forecast": monthly_ac_consumption,
+                "annual_ac_cost": total_ac_cost,
+                "peak_season_cost": peak_cost,
+                "location": location
+            }
+    
     # Savings Recommendations
     st.divider()
     st.markdown("### 💡 Personalized Recommendations")
@@ -421,7 +583,7 @@ elif st.session_state.survey_step == 3:
                 st.session_state.user_data = {
                     "monthly_consumption": st.session_state.survey_data.get("total_appliance_kwh", 0),
                     "monthly_cost": bill if 'bill' in locals() else 0,
-                    "survey_timestamp": pd.Timestamp.now(),
+                    "survey_timestamp": datetime.now().isoformat(),
                     **st.session_state.survey_data
                 }
                 st.success("🎉 Survey completed successfully!")
@@ -458,69 +620,114 @@ if st.session_state.survey_completed:
         - Appliances Logged: {len(st.session_state.user_data.get('appliances', []))}
         """)
     
-    # ========== ADD SURVEY MANAGEMENT OPTIONS HERE ==========
+    # ========== FIXED EXPORT SECTION ==========
     st.divider()
-    st.markdown("### 🔄 Survey Management")
+    st.markdown("### 📤 Export Survey Data")
     
-    col_edit, col_reset, col_export = st.columns(3)
-    
-    with col_edit:
-        if st.button("✏️ Edit Survey", use_container_width=True, icon="📝"):
-            # Go back to review step for editing
-            st.session_state.survey_completed = False
-            st.session_state.survey_step = 3  # Go to review step
-            st.rerun()
-    
-    with col_reset:
-        if st.button("🔄 Start Fresh", use_container_width=True, icon="🔄"):
-            # Reset everything
-            for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
-    
-    with col_export:
-        if st.button("📥 Export Data", use_container_width=True, icon="💾"):
-            import json
-            import pandas as pd
-            from io import BytesIO
-            
-            # Create export options
-            export_option = st.selectbox(
-                "Export format:",
-                ["JSON", "CSV", "Excel"]
+    if st.button("📥 Export Data Options", icon="💾"):
+        # Create export buttons in columns
+        exp_col1, exp_col2, exp_col3 = st.columns(3)
+        
+        with exp_col1:
+            # JSON Export
+            survey_json = json.dumps(st.session_state.user_data, indent=2, default=json_serializer)
+            st.download_button(
+                label="Download JSON",
+                data=survey_json,
+                file_name="energy_survey.json",
+                mime="application/json",
+                use_container_width=True
             )
-            
-            if export_option == "JSON":
-                survey_json = json.dumps(st.session_state.user_data, indent=2, default=str)
-                st.download_button(
-                    label="Download JSON",
-                    data=survey_json,
-                    file_name="energy_survey.json",
-                    mime="application/json"
-                )
-            elif export_option == "CSV":
-                # Convert to DataFrame
-                df = pd.json_normalize(st.session_state.user_data)
-                csv = df.to_csv(index=False)
+        
+        with exp_col2:
+            # CSV Export - FIXED
+            try:
+                # Flatten nested data for CSV
+                flat_data = {}
+                for key, value in st.session_state.user_data.items():
+                    if isinstance(value, (dict, list)):
+                        # Convert dict/list to string for CSV
+                        flat_data[key] = json.dumps(value, default=json_serializer)
+                    else:
+                        flat_data[key] = value
+                
+                df_csv = pd.DataFrame([flat_data])
+                csv_data = df_csv.to_csv(index=False)
+                
                 st.download_button(
                     label="Download CSV",
-                    data=csv,
+                    data=csv_data,
                     file_name="energy_survey.csv",
-                    mime="text/csv"
+                    mime="text/csv",
+                    use_container_width=True
                 )
-            else:  # Excel
-                df = pd.json_normalize(st.session_state.user_data)
+            except Exception as e:
+                st.error(f"Error creating CSV: {str(e)}")
+        
+        with exp_col3:
+            # Excel Export - FIXED
+            try:
+                # Create multiple sheets for better Excel export
                 output = BytesIO()
+                
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df.to_excel(writer, index=False, sheet_name='Survey Data')
+                    # Sheet 1: Household info
+                    household_df = pd.DataFrame([st.session_state.user_data.get('household', {})])
+                    household_df.to_excel(writer, sheet_name='Household', index=False)
+                    
+                    # Sheet 2: Appliances
+                    appliances_df = pd.DataFrame(st.session_state.user_data.get('appliances', []))
+                    appliances_df.to_excel(writer, sheet_name='Appliances', index=False)
+                    
+                    # Sheet 3: Usage patterns
+                    usage_df = pd.DataFrame([st.session_state.user_data.get('usage', {})])
+                    usage_df.to_excel(writer, sheet_name='Usage Patterns', index=False)
+                    
+                    # Sheet 4: AC Prediction if exists
+                    if 'ac_prediction' in st.session_state.user_data:
+                        ac_pred_df = pd.DataFrame(st.session_state.user_data['ac_prediction'].get('monthly_forecast', []))
+                        ac_pred_df.to_excel(writer, sheet_name='AC Forecast', index=False)
+                    
+                    # Sheet 5: Summary
+                    summary_data = {
+                        'Metric': ['Monthly Consumption', 'Monthly Cost', 'Survey Date'],
+                        'Value': [
+                            f"{st.session_state.user_data.get('monthly_consumption', 0):.1f} kWh",
+                            f"₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}",
+                            st.session_state.user_data.get('survey_timestamp', 'N/A')
+                        ]
+                    }
+                    summary_df = pd.DataFrame(summary_data)
+                    summary_df.to_excel(writer, sheet_name='Summary', index=False)
+                
                 st.download_button(
                     label="Download Excel",
                     data=output.getvalue(),
                     file_name="energy_survey.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
                 )
-    # ========== END OF ADDED SECTION ==========
+            except Exception as e:
+                st.error(f"Error creating Excel: {str(e)}")
+    
+    # ========== SURVEY MANAGEMENT ==========
+    st.divider()
+    st.markdown("### 🔄 Survey Management")
+    
+    col_edit, col_reset = st.columns(2)
+    
+    with col_edit:
+        if st.button("✏️ Edit Survey", use_container_width=True, icon="📝"):
+            st.session_state.survey_completed = False
+            st.session_state.survey_step = 3
+            st.rerun()
+    
+    with col_reset:
+        if st.button("🔄 Start Fresh", use_container_width=True, icon="🔄"):
+            for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
 
 else:
     # Regular navigation buttons for survey steps
@@ -561,28 +768,18 @@ else:
     st.divider()
     st.markdown("### ⚙️ Survey Management")
     
-    col_reset, col_restart, col_export = st.columns(3)
+    col_reset, col_restart = st.columns(2)
     
     with col_reset:
         if st.button("↩️ Reset Current Step", use_container_width=True, type="secondary"):
-            # Just rerun to reset current step inputs
             st.rerun()
     
     with col_restart:
         if st.button("🔄 Restart Survey", use_container_width=True, type="secondary"):
-            # Confirm restart
-            confirm = st.checkbox("Are you sure you want to restart? All data will be lost.")
-            if confirm:
-                for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.rerun()
-    
-    with col_export:
-        if st.button("📥 Save Progress", use_container_width=True, type="secondary"):
-            # Save current progress
-            st.success("Progress saved in session!")
-            st.info(f"Currently at Step {st.session_state.survey_step + 1}")
+            for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
 
 # Update progress at the end
 st.divider()
