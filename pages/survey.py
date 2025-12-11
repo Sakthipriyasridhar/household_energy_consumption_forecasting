@@ -174,7 +174,7 @@ elif st.session_state.survey_step == 3:
         if st.button("Complete Survey", type="primary", use_container_width=True):
             st.session_state.survey_completed = True
             st.success("✅ Survey completed successfully!")
-            st.balloons()
+            st.return()
             st.info("Now proceed to **AI Forecast** for predictions!")
 
 # Navigation Buttons
@@ -226,4 +226,5 @@ if st.button("✅ Complete Survey & Continue", type="primary"):
     
     # Don't automatically redirect
     # st.switch_page("pages/4_Forecast.py")  # REMOVE THIS LINE
+
 
