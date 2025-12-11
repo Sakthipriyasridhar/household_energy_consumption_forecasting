@@ -434,6 +434,51 @@ st.divider()
 # Show completion options if survey is completed
 if st.session_state.survey_completed:
     st.markdown("### 🎉 What would you like to do next?")
+
+
+st.divider()
+
+# Redo Survey and Navigation Options Section
+st.markdown("### 🔄 Survey Options")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("↩️ Go Back to Survey", use_container_width=True):
+        # Go back to the last step
+        if st.session_state.survey_step > 0:
+            st.session_state.survey_step -= 1
+        st.rerun()
+
+with col2:
+    if st.button("🔄 Start Over", use_container_width=True, type="secondary"):
+        # Reset the entire survey
+        st.session_state.survey_step = 0
+        st.session_state.survey_completed = False
+        st.session_state.survey_data = {}
+        if 'user_data' in st.session_state:
+            del st.session_state.user_data
+        st.rerun()
+
+with col3:
+    if st.button("📥 Export Data", use_container_width=True, type="secondary"):
+        # Export survey data as JSON
+        import json
+        survey_json = json.dumps(st.session_state.user_data, indent=2)
+        st.download_button(
+            label="Download Survey Data (JSON)",
+            data=survey_json,
+            file_name="energy_survey_data.json",
+            mime="application/json",
+            use_container_width=True
+        )
+
+# Add a more prominent Previous button during survey steps
+if not st.session_state.survey_completed and st.session_state.survey_step > 0:
+    st.divider()
+    if st.button("⬅️ Go Back to Previous Step", use_container_width=True, icon="↩️"):
+        st.session_state.survey_step -= 1
+        st.rerun()
     
     col1, col2, col3 = st.columns(3)
     
@@ -481,3 +526,4 @@ else:
                 
                 st.session_state.survey_step += 1
                 st.rerun()
+
