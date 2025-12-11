@@ -436,6 +436,30 @@ if st.session_state.survey_completed:
     st.markdown("### 🎉 What would you like to do next?")
 
 
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📊 Go to Data Analysis", use_container_width=True, icon="📈"):
+            st.switch_page("pages/data_loader.py")
+    
+    with col2:
+        if st.button("🤖 AI Forecasting", use_container_width=True, icon="🔮"):
+            st.switch_page("pages/forecast.py")
+    
+    with col3:
+        if st.button("🏠 Back to Dashboard", use_container_width=True, icon="🏠"):
+            st.switch_page("main.py")
+    
+    # Show a summary card
+    if "user_data" in st.session_state:
+        st.info(f"""
+        **Survey Summary:** 
+        - Monthly Consumption: {st.session_state.user_data.get('monthly_consumption', 0):.1f} kWh
+        - Estimated Cost: ₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}
+        - Appliances Logged: {len(st.session_state.user_data.get('appliances', []))}
+        """)
+else:
+ 
 st.divider()
 
 # Redo Survey and Navigation Options Section
@@ -480,50 +504,3 @@ if not st.session_state.survey_completed and st.session_state.survey_step > 0:
         st.session_state.survey_step -= 1
         st.rerun()
     
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📊 Go to Data Analysis", use_container_width=True, icon="📈"):
-            st.switch_page("pages/data_loader.py")
-    
-    with col2:
-        if st.button("🤖 AI Forecasting", use_container_width=True, icon="🔮"):
-            st.switch_page("pages/forecast.py")
-    
-    with col3:
-        if st.button("🏠 Back to Dashboard", use_container_width=True, icon="🏠"):
-            st.switch_page("main.py")
-    
-    # Show a summary card
-    if "user_data" in st.session_state:
-        st.info(f"""
-        **Survey Summary:** 
-        - Monthly Consumption: {st.session_state.user_data.get('monthly_consumption', 0):.1f} kWh
-        - Estimated Cost: ₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}
-        - Appliances Logged: {len(st.session_state.user_data.get('appliances', []))}
-        """)
-else:
-    # Regular navigation buttons for survey steps
-    col1, col2, col3 = st.columns([1, 2, 1])
-
-    with col1:
-        if st.session_state.survey_step > 0:
-            if st.button("⬅️ Previous", use_container_width=True):
-                st.session_state.survey_step -= 1
-                st.rerun()
-
-    with col3:
-        if st.session_state.survey_step < len(steps) - 1:
-            if st.button("Next ➡️", type="primary", use_container_width=True):
-                # Validate current step
-                if st.session_state.survey_step == 2:  # Usage patterns step
-                    usage = st.session_state.survey_data.get("usage", {})
-                    total = sum([usage.get('morning_peak', 0), usage.get('day_usage', 0),
-                                usage.get('evening_peak', 0), usage.get('night_usage', 0)])
-                    if total != 100:
-                        st.error("⚠️ Please adjust usage percentages to total 100%")
-                        st.stop()
-                
-                st.session_state.survey_step += 1
-                st.rerun()
-
