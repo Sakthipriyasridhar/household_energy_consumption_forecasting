@@ -139,12 +139,15 @@ class AdvancedFeatureEngineer:
         self.scaler = StandardScaler()
     
     def create_all_features(self, df, target_col='Energy_Consumption_kWh', config=None):
-        """Create comprehensive feature set"""
+        """Create comprehensive feature set - FIXED TO EXCLUDE NON-NUMERIC COLUMNS"""
         if config is None:
             config = st.session_state.feature_engineering
         
         df = df.copy()
         original_len = len(df)
+        
+        # Store original non-numeric columns to exclude later
+        self.non_numeric_cols = [col for col in df.columns if not pd.api.types.is_numeric_dtype(df[col])]
         
         # 1. Basic Date Features
         if config['date_features']:
@@ -174,9 +177,14 @@ class AdvancedFeatureEngineer:
         # Drop NaN rows created by lag/rolling features
         df = df.dropna()
         
-        # Store feature names (excluding target and date)
-        exclude_cols = ['Date', target_col, 'Cost_Rs', 'Price_Rs_per_kWh']
-        self.feature_names = [col for col in df.columns if col not in exclude_cols]
+        # FIX: Store only numeric feature names (excluding target, date, and any non-numeric columns)
+        exclude_cols = ['Date', target_col, 'Cost_Rs', 'Price_Rs_per_kWh', 'Source', 'Location', 'temp_category']
+        exclude_cols.extend([col for col in df.columns if not pd.api.types.is_numeric_dtype(df[col])])
+        
+        # Only include numeric columns
+        self.feature_names = [col for col in df.columns 
+                             if col not in exclude_cols 
+                             and pd.api.types.is_numeric_dtype(df[col])]
         
         st.info(f"✅ Created {len(self.feature_names)} features from {original_len} records")
         return df
@@ -238,17 +246,9 @@ class AdvancedFeatureEngineer:
     
     def _add_interaction_features(self, df, target_col):
         """Add interaction features with temperature"""
-        df['temp_consumption_interaction'] = df[target_col] * df['Temperature_C']
-        df['temp_squared'] = df['Temperature_C'] ** 2
-        
-        # Temperature bins
-        df['temp_category'] = pd.cut(df['Temperature_C'], 
-                                     bins=[-np.inf, 10, 20, 30, np.inf],
-                                     labels=['Cold', 'Cool', 'Warm', 'Hot'])
-        
-        # One-hot encode temperature categories
-        temp_dummies = pd.get_dummies(df['temp_category'], prefix='temp')
-        df = pd.concat([df, temp_dummies], axis=1)
+        if 'Temperature_C' in df.columns and pd.api.types.is_numeric_dtype(df['Temperature_C']):
+            df['temp_consumption_interaction'] = df[target_col] * df['Temperature_C']
+            df['temp_squared'] = df['Temperature_C'] ** 2
         
         return df
 
@@ -347,6 +347,14 @@ class MLModelTrainer:
     
     def _train_linear_regression(self, X_train, X_test, y_train, y_test, params):
         """Train Linear Regression with polynomial features"""
+        # Check if we have enough features
+        if X_train.shape[1] < 2:
+            # If not enough features, use simple linear regression
+            model = LinearRegression()
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
+            return model, self._calculate_comprehensive_metrics(y_test, y_pred)
+        
         poly = PolynomialFeatures(degree=2, include_bias=False)
         X_train_poly = poly.fit_transform(X_train)
         X_test_poly = poly.transform(X_test)
@@ -430,8 +438,12 @@ class MLModelTrainer:
         }
         
         # Add percentage errors
-        metrics['MAE %'] = (metrics['MAE'] / np.mean(y_true)) * 100 if np.mean(y_true) > 0 else np.nan
-        metrics['RMSE %'] = (metrics['RMSE'] / np.mean(y_true)) * 100 if np.mean(y_true) > 0 else np.nan
+        if np.mean(y_true) > 0:
+            metrics['MAE %'] = (metrics['MAE'] / np.mean(y_true)) * 100
+            metrics['RMSE %'] = (metrics['RMSE'] / np.mean(y_true)) * 100
+        else:
+            metrics['MAE %'] = np.nan
+            metrics['RMSE %'] = np.nan
         
         return metrics
     
@@ -499,54 +511,60 @@ def generate_forecast_with_ci(model_info, data, periods, target_col, confidence_
                                                   st.session_state.feature_engineering)
         
         if len(df_features) > 0:
-            last_features = df_features.iloc[-1:][feature_cols].fillna(method='ffill').fillna(0)
+            # Get only the feature columns that exist
+            available_features = [col for col in feature_cols if col in df_features.columns]
             
-            if scaler:
-                X_pred_scaled = scaler.transform(last_features)
-            else:
-                X_pred_scaled = last_features
-            
-            # Make prediction
-            if model_type == 'ARIMA':
-                prediction = model.forecast(steps=1)[0]
-                # Simple uncertainty for ARIMA
-                uncertainty = prediction * 0.15 * (1 + (i / periods) * 0.5)
-            else:
-                prediction = model.predict(X_pred_scaled)[0]
-                # Uncertainty based on distance from training data
-                base_uncertainty = prediction * 0.12
-                time_uncertainty = (i / periods) * prediction * 0.08
-                uncertainty = base_uncertainty + time_uncertainty
-            
-            forecasts.append(max(0.1, prediction))
-            lower_bounds.append(max(0.1, prediction - z_score * uncertainty))
-            upper_bounds.append(max(0.1, prediction + z_score * uncertainty))
-            
-            # Update data
-            current_data = pd.concat([current_data, pd.DataFrame({
-                'Date': [next_date],
-                target_col: [prediction]
-            })], ignore_index=True)
+            if available_features:
+                last_features = df_features.iloc[-1:][available_features].fillna(method='ffill').fillna(0)
+                
+                if scaler:
+                    X_pred_scaled = scaler.transform(last_features)
+                else:
+                    X_pred_scaled = last_features
+                
+                # Make prediction
+                if model_type == 'ARIMA':
+                    prediction = model.forecast(steps=1)[0]
+                    # Simple uncertainty for ARIMA
+                    uncertainty = prediction * 0.15 * (1 + (i / periods) * 0.5)
+                else:
+                    prediction = model.predict(X_pred_scaled)[0]
+                    # Uncertainty based on distance from training data
+                    base_uncertainty = prediction * 0.12
+                    time_uncertainty = (i / periods) * prediction * 0.08
+                    uncertainty = base_uncertainty + time_uncertainty
+                
+                forecasts.append(max(0.1, prediction))
+                lower_bounds.append(max(0.1, prediction - z_score * uncertainty))
+                upper_bounds.append(max(0.1, prediction + z_score * uncertainty))
+                
+                # Update data
+                current_data = pd.concat([current_data, pd.DataFrame({
+                    'Date': [next_date],
+                    target_col: [prediction]
+                })], ignore_index=True)
     
     # Create forecast dataframe
-    forecast_dates = pd.date_range(
-        start=data['Date'].max() + timedelta(days=1),
-        periods=periods,
-        freq='D'
-    )
-    
-    forecast_df = pd.DataFrame({
-        'Date': forecast_dates,
-        'Forecast_kWh': np.round(forecasts, 2),
-        'Lower_Bound_kWh': np.round(lower_bounds, 2),
-        'Upper_Bound_kWh': np.round(upper_bounds, 2),
-        'Forecast_Cost_Rs': np.round(np.array(forecasts) * 8, 2),
-        'Lower_Cost_Rs': np.round(np.array(lower_bounds) * 8, 2),
-        'Upper_Cost_Rs': np.round(np.array(upper_bounds) * 8, 2),
-        'Confidence_Level': f"{confidence_level}%"
-    })
-    
-    return forecast_df
+    if forecasts:
+        forecast_dates = pd.date_range(
+            start=data['Date'].max() + timedelta(days=1),
+            periods=periods,
+            freq='D'
+        )
+        
+        forecast_df = pd.DataFrame({
+            'Date': forecast_dates,
+            'Forecast_kWh': np.round(forecasts, 2),
+            'Lower_Bound_kWh': np.round(lower_bounds, 2),
+            'Upper_Bound_kWh': np.round(upper_bounds, 2),
+            'Forecast_Cost_Rs': np.round(np.array(forecasts) * 8, 2),
+            'Lower_Cost_Rs': np.round(np.array(lower_bounds) * 8, 2),
+            'Upper_Cost_Rs': np.round(np.array(upper_bounds) * 8, 2),
+            'Confidence_Level': f"{confidence_level}%"
+        })
+        
+        return forecast_df
+    return None
 
 # Feature Engineering Sidebar
 def create_feature_engineering_sidebar():
@@ -633,9 +651,12 @@ def display_model_performance(metrics, model_name):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("R² Score", f"{metrics.get('R2', 0):.4f}",
+            r2 = metrics.get('R2', 0)
+            r2_display = f"{r2:.4f}" if not np.isnan(r2) else "N/A"
+            delta_color = "normal" if r2 > 0.7 else "off"
+            st.metric("R² Score", r2_display,
                      delta="Higher is better", 
-                     delta_color="normal" if metrics.get('R2', 0) > 0.7 else "off")
+                     delta_color=delta_color)
         
         with col2:
             mape = metrics.get('MAPE', np.nan)
@@ -646,12 +667,14 @@ def display_model_performance(metrics, model_name):
                      delta_color="inverse")
         
         with col3:
-            st.metric("RMSE", f"{metrics.get('RMSE', 0):.2f} kWh",
+            rmse = metrics.get('RMSE', 0)
+            st.metric("RMSE", f"{rmse:.2f} kWh",
                      delta="Lower is better",
                      delta_color="inverse")
         
         with col4:
-            st.metric("MAE", f"{metrics.get('MAE', 0):.2f} kWh",
+            mae = metrics.get('MAE', 0)
+            st.metric("MAE", f"{mae:.2f} kWh",
                      delta="Lower is better",
                      delta_color="inverse")
     
@@ -935,13 +958,22 @@ def main():
     
     # Data loading section (simplified for this example)
     if st.session_state.forecast_data is None:
-        st.warning("Please load data from the main page first")
-        if st.button("Go to Data Loading"):
-            st.switch_page("pages/survey.py")
+        st.warning("⚠️ Please load data from the Data Loader page first")
+        if st.button("📥 Go to Data Loading"):
+            st.switch_page("pages/2_Data_Loader.py")
         return
     
     data = st.session_state.forecast_data
     target_col = 'Energy_Consumption_kWh' if 'Energy_Consumption_kWh' in data.columns else 'Consumption'
+    
+    # Show data preview
+    with st.expander("📋 View Loaded Data Preview", expanded=False):
+        st.write(f"Data shape: {data.shape}")
+        st.dataframe(data.head(10), use_container_width=True)
+        
+        # Show column types
+        st.write("### Column Data Types")
+        st.write(data.dtypes)
     
     # Main content
     st.subheader("🔬 Advanced Feature Engineering")
@@ -961,7 +993,14 @@ def main():
     with col3:
         st.info(f"**Total Features:** {len(engineered_data.columns)}")
     
-    # Model training section
+    # Show engineered features preview
+    with st.expander("🔍 View Engineered Features", expanded=False):
+        st.write(f"Available numeric features: {len(engineer.feature_names)}")
+        st.write("Feature names:", engineer.feature_names[:20])  # Show first 20
+        st.dataframe(engineered_data[engineer.feature_names + [target_col]].head(), 
+                    use_container_width=True)
+    
+    # Model training section - FIXED TO USE ONLY NUMERIC FEATURES
     st.subheader("🤖 Model Training & Evaluation")
     
     model_options = ["Random Forest", "XGBoost", "LightGBM", "Linear Regression", "Gradient Boosting"]
@@ -974,17 +1013,49 @@ def main():
     
     st.session_state.selected_model = selected_model
     
+    # Add forecast period selection
+    forecast_period = st.slider("Forecast Period (days)", 30, 365, 90, 30,
+                               help="Number of days to forecast into the future")
+    st.session_state.forecast_period = forecast_period
+    
     if st.button("🚀 Train Model & Generate Forecast", type="primary", use_container_width=True):
         with st.spinner(f"Training {selected_model} model..."):
             try:
-                # Prepare data
+                # Prepare data - CRITICAL FIX: Use only numeric features
+                if not engineer.feature_names:
+                    st.error("❌ No numeric features available for training!")
+                    st.info("Try enabling more feature engineering options in the sidebar")
+                    return
+                
+                # Verify all features are numeric
+                non_numeric_features = [col for col in engineer.feature_names 
+                                       if not pd.api.types.is_numeric_dtype(engineered_data[col])]
+                
+                if non_numeric_features:
+                    st.warning(f"Removing non-numeric features: {non_numeric_features}")
+                    engineer.feature_names = [col for col in engineer.feature_names 
+                                            if col not in non_numeric_features]
+                
+                if not engineer.feature_names:
+                    st.error("❌ No valid numeric features after cleaning!")
+                    return
+                
+                # Use only numeric features
                 X = engineered_data[engineer.feature_names]
                 y = engineered_data[target_col]
+                
+                # Debug info
+                st.write(f"✅ Using {X.shape[1]} numeric features for training")
                 
                 # Split data
                 split_idx = int(len(X) * 0.8)
                 X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
                 y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+                
+                # Check if we have enough data
+                if len(X_train) < 10 or len(X_test) < 5:
+                    st.error("❌ Not enough data for training. Need at least 10 training samples and 5 test samples.")
+                    return
                 
                 # Scale features
                 scaler = StandardScaler()
@@ -997,6 +1068,10 @@ def main():
                     X_train_scaled, X_test_scaled, y_train, y_test,
                     selected_model, st.session_state.get('model_params')
                 )
+                
+                if model is None:
+                    st.error("❌ Model training failed!")
+                    return
                 
                 # Store results
                 st.session_state.trained_model = {
@@ -1012,16 +1087,21 @@ def main():
                 forecast_result = generate_forecast_with_ci(
                     st.session_state.trained_model,
                     data,
-                    st.session_state.get('forecast_period', 365),
+                    forecast_period,
                     target_col,
                     st.session_state.confidence_level
                 )
                 
-                st.session_state.forecast_result = forecast_result
-                st.success("✅ Model trained and forecast generated successfully!")
+                if forecast_result is not None:
+                    st.session_state.forecast_result = forecast_result
+                    st.success(f"✅ {selected_model} trained successfully! Generated {forecast_period}-day forecast.")
+                else:
+                    st.error("❌ Forecast generation failed!")
                 
             except Exception as e:
-                st.error(f"Error: {str(e)}")
+                st.error(f"❌ Error: {str(e)}")
+                import traceback
+                st.error(f"Detailed error: {traceback.format_exc()}")
     
     # Display results if available
     if (st.session_state.trained_model is not None and 
@@ -1046,4 +1126,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
