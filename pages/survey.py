@@ -27,6 +27,8 @@ for i, step in enumerate(steps):
 
 st.divider()
 
+survey_data = {}
+
 # Step 1: Household Info
 if st.session_state.survey_step == 0:
     st.subheader("🏠 Household Information")
@@ -196,6 +198,11 @@ with col3:
             st.success("Survey completed!")
             st.rerun()
 
+if survey_data:  # Or check specific required fields
+    st.session_state.user_data = survey_data
+else:
+    st.error("Please complete the survey before proceeding.")
+
 # Update progress
 progress.progress((st.session_state.survey_step + 1) / len(steps))
 
@@ -219,3 +226,4 @@ if st.button("✅ Complete Survey & Continue", type="primary"):
     
     # Don't automatically redirect
     # st.switch_page("pages/4_Forecast.py")  # REMOVE THIS LINE
+
