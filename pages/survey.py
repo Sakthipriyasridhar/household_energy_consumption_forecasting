@@ -478,7 +478,7 @@ elif st.session_state.survey_step == 3:
             
             with col_pred1:
                 st.markdown("#### 📈 AC Consumption Forecast")
-                fig1 = go.Figure()
+                fig1 = go.Figure()  # ← CORRECT: fig1 not ffg1
                 fig1.add_trace(go.Scatter(x=months, y=df_ac_prediction["AC Consumption (kWh)"],
                                          mode='lines+markers', name='AC Consumption',
                                          line=dict(color='#FF6B6B', width=3)))
@@ -487,7 +487,7 @@ elif st.session_state.survey_step == 3:
                                          yaxis='y2',
                                          line=dict(color='#4ECDC4', width=2, dash='dash')))
                 
-                fig1.update_layout(
+                fig1.update_layout(  # ← CORRECT: fig1 not ffg1
                     title=f'Monthly AC Consumption Forecast for {location}',
                     yaxis=dict(title='AC Consumption (kWh)', titlefont=dict(color='#FF6B6B')),
                     yaxis2=dict(title='Temperature (°C)', titlefont=dict(color='#4ECDC4'),
@@ -784,3 +784,4 @@ else:
 # Update progress at the end
 st.divider()
 st.caption(f"Progress: Step {st.session_state.survey_step + 1} of {len(steps)}")
+
