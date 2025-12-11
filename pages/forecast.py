@@ -960,7 +960,7 @@ def main():
     if st.session_state.forecast_data is None:
         st.warning("⚠️ Please load data from the Data Loader page first")
         if st.button("📥 Go to Data Loading"):
-            st.switch_page("pages/2_Data_Loader.py")
+            st.switch_page("pages/data_loader.py")
         return
     
     data = st.session_state.forecast_data
@@ -1126,3 +1126,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
