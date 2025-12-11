@@ -435,7 +435,6 @@ st.divider()
 if st.session_state.survey_completed:
     st.markdown("### 🎉 What would you like to do next?")
 
-
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -458,49 +457,133 @@ if st.session_state.survey_completed:
         - Estimated Cost: ₹{st.session_state.user_data.get('monthly_cost', 0):,.0f}
         - Appliances Logged: {len(st.session_state.user_data.get('appliances', []))}
         """)
-else:
- 
-st.divider()
-
-# Redo Survey and Navigation Options Section
-st.markdown("### 🔄 Survey Options")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    if st.button("↩️ Go Back to Survey", use_container_width=True):
-        # Go back to the last step
-        if st.session_state.survey_step > 0:
-            st.session_state.survey_step -= 1
-        st.rerun()
-
-with col2:
-    if st.button("🔄 Start Over", use_container_width=True, type="secondary"):
-        # Reset the entire survey
-        st.session_state.survey_step = 0
-        st.session_state.survey_completed = False
-        st.session_state.survey_data = {}
-        if 'user_data' in st.session_state:
-            del st.session_state.user_data
-        st.rerun()
-
-with col3:
-    if st.button("📥 Export Data", use_container_width=True, type="secondary"):
-        # Export survey data as JSON
-        import json
-        survey_json = json.dumps(st.session_state.user_data, indent=2)
-        st.download_button(
-            label="Download Survey Data (JSON)",
-            data=survey_json,
-            file_name="energy_survey_data.json",
-            mime="application/json",
-            use_container_width=True
-        )
-
-# Add a more prominent Previous button during survey steps
-if not st.session_state.survey_completed and st.session_state.survey_step > 0:
-    st.divider()
-    if st.button("⬅️ Go Back to Previous Step", use_container_width=True, icon="↩️"):
-        st.session_state.survey_step -= 1
-        st.rerun()
     
+    # ========== ADD SURVEY MANAGEMENT OPTIONS HERE ==========
+    st.divider()
+    st.markdown("### 🔄 Survey Management")
+    
+    col_edit, col_reset, col_export = st.columns(3)
+    
+    with col_edit:
+        if st.button("✏️ Edit Survey", use_container_width=True, icon="📝"):
+            # Go back to review step for editing
+            st.session_state.survey_completed = False
+            st.session_state.survey_step = 3  # Go to review step
+            st.rerun()
+    
+    with col_reset:
+        if st.button("🔄 Start Fresh", use_container_width=True, icon="🔄"):
+            # Reset everything
+            for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
+    
+    with col_export:
+        if st.button("📥 Export Data", use_container_width=True, icon="💾"):
+            import json
+            import pandas as pd
+            from io import BytesIO
+            
+            # Create export options
+            export_option = st.selectbox(
+                "Export format:",
+                ["JSON", "CSV", "Excel"]
+            )
+            
+            if export_option == "JSON":
+                survey_json = json.dumps(st.session_state.user_data, indent=2, default=str)
+                st.download_button(
+                    label="Download JSON",
+                    data=survey_json,
+                    file_name="energy_survey.json",
+                    mime="application/json"
+                )
+            elif export_option == "CSV":
+                # Convert to DataFrame
+                df = pd.json_normalize(st.session_state.user_data)
+                csv = df.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name="energy_survey.csv",
+                    mime="text/csv"
+                )
+            else:  # Excel
+                df = pd.json_normalize(st.session_state.user_data)
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df.to_excel(writer, index=False, sheet_name='Survey Data')
+                st.download_button(
+                    label="Download Excel",
+                    data=output.getvalue(),
+                    file_name="energy_survey.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+    # ========== END OF ADDED SECTION ==========
+
+else:
+    # Regular navigation buttons for survey steps
+    st.markdown("### 🔄 Navigation")
+    
+    # Previous/Next buttons
+    col_prev, col_mid, col_next = st.columns([1, 2, 1])
+    
+    with col_prev:
+        if st.session_state.survey_step > 0:
+            if st.button("⬅️ Previous Step", use_container_width=True):
+                st.session_state.survey_step -= 1
+                st.rerun()
+        else:
+            if st.button("🏠 Dashboard", use_container_width=True):
+                st.switch_page("main.py")
+    
+    with col_next:
+        if st.session_state.survey_step < len(steps) - 1:
+            if st.button("Next Step ➡️", type="primary", use_container_width=True):
+                # Validate current step before proceeding
+                if st.session_state.survey_step == 2:  # Usage patterns step
+                    usage = st.session_state.survey_data.get("usage", {})
+                    total = sum([usage.get('morning_peak', 0), usage.get('day_usage', 0),
+                                usage.get('evening_peak', 0), usage.get('night_usage', 0)])
+                    if total != 100:
+                        st.error("⚠️ Please adjust usage percentages to total 100%")
+                        st.stop()
+                
+                st.session_state.survey_step += 1
+                st.rerun()
+        else:
+            if st.button("Review ✅", type="primary", use_container_width=True):
+                st.session_state.survey_step = 3
+                st.rerun()
+    
+    # Additional survey management options
+    st.divider()
+    st.markdown("### ⚙️ Survey Management")
+    
+    col_reset, col_restart, col_export = st.columns(3)
+    
+    with col_reset:
+        if st.button("↩️ Reset Current Step", use_container_width=True, type="secondary"):
+            # Just rerun to reset current step inputs
+            st.rerun()
+    
+    with col_restart:
+        if st.button("🔄 Restart Survey", use_container_width=True, type="secondary"):
+            # Confirm restart
+            confirm = st.checkbox("Are you sure you want to restart? All data will be lost.")
+            if confirm:
+                for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
+    
+    with col_export:
+        if st.button("📥 Save Progress", use_container_width=True, type="secondary"):
+            # Save current progress
+            st.success("Progress saved in session!")
+            st.info(f"Currently at Step {st.session_state.survey_step + 1}")
+
+# Update progress at the end
+st.divider()
+st.caption(f"Progress: Step {st.session_state.survey_step + 1} of {len(steps)}")
