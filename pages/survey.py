@@ -489,8 +489,8 @@ elif st.session_state.survey_step == 3:
                 
                 fig1.update_layout(  # ← CORRECT: fig1 not ffg1
                     title=f'Monthly AC Consumption Forecast for {location}',
-                    yaxis=dict(title='AC Consumption (kWh)', titlefont=dict(color='#FF6B6B')),
-                    yaxis2=dict(title='Temperature (°C)', titlefont=dict(color='#4ECDC4'),
+                    yaxis=dict(title='AC Consumption (kWh)', title_font=dict(color='#FF6B6B')),
+                    yaxis2=dict(title='Temperature (°C)', title_font=dict(color='#4ECDC4'),
                                overlaying='y', side='right'),
                     hovermode='x unified'
                 )
@@ -784,4 +784,5 @@ else:
 # Update progress at the end
 st.divider()
 st.caption(f"Progress: Step {st.session_state.survey_step + 1} of {len(steps)}")
+
 
