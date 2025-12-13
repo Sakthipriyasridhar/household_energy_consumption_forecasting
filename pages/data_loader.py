@@ -307,7 +307,7 @@ with tab1:
     else:
         st.warning("⚠️ No completed survey found.")
         if st.button("Take Survey Now", type="secondary"):
-            st.switch_page("pages/3_Survey.py")
+            st.switch_page("pages/survey.py")
 
 with tab2:
     st.markdown("""
