@@ -555,9 +555,6 @@ def render_sidebar():
                 categories[category] = []
             categories[category].append((algo_name, algo_info))
         
-        # Network
-        st.markdown("#### **Network**")
-        st.checkbox("Neural Network", value=False, disabled=True, key="neural_network")
         
         # Display each category
         for category, algos in categories.items():
@@ -754,38 +751,7 @@ def render_performance_tab(data, date_column, target_column):
                 </div>
                 """, unsafe_allow_html=True)
         
-        # Quick forecast button with top model
-        st.markdown("---")
-        st.markdown("### 🚀 Quick Forecast with Top Model")
-        
-        top_model_name = top_3.iloc[0]['Algorithm']
-        top_model_metrics = results[top_model_name]
-        
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            st.markdown(f"**Best Model:** {top_model_name} (R²: {top_model_metrics['test_r2']:.3f})")
-            st.markdown("*Click the button below to generate forecast with the top model*")
-        
-        with col2:
-            forecast_days = st.number_input(
-                "Days to forecast", 
-                min_value=7, 
-                max_value=90, 
-                value=st.session_state.get('forecast_days', 30),
-                key="quick_forecast_days_display"
-            )
-        
-        with col3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button(f"📅 Forecast with #{top_3.iloc[0]['Rank']} {top_model_name}", 
-                        type="primary", 
-                        use_container_width=True,
-                        key="forecast_top_model_button"):
-                # Update session state safely
-                st.session_state['quick_forecast_model'] = top_model_name
-                st.session_state['forecast_days'] = forecast_days
-                st.success(f"Forecast settings updated! Using {top_model_name} for {forecast_days} days.")
-        
+
         # INDIVIDUAL ALGORITHM DETAILS SECTION
         st.markdown("---")
         st.markdown("## 🔍 Individual Algorithm Performance Details")
@@ -1402,3 +1368,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
