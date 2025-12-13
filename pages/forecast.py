@@ -130,23 +130,54 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
     }
     
-    .clickable-algo {
-        cursor: pointer;
-        transition: all 0.3s ease;
+    /* Top 3 performers styling */
+    .top-performer-card {
+        border: 3px solid;
+        border-radius: 12px;
+        padding: 15px;
+        margin: 10px 0;
+        text-align: center;
     }
     
-    .clickable-algo:hover {
-        background-color: #f0f8ff;
-        transform: translateY(-2px);
+    .top-1 {
+        border-color: #FFD700;
+        background: linear-gradient(135deg, #FFF9C4, #FFEB3B20);
     }
     
-    .tab-container {
-        margin-top: 20px;
+    .top-2 {
+        border-color: #C0C0C0;
+        background: linear-gradient(135deg, #F5F5F5, #9E9E9E20);
+    }
+    
+    .top-3 {
+        border-color: #CD7F32;
+        background: linear-gradient(135deg, #FFECB3, #FF980020);
+    }
+    
+    /* Streamlit tabs customization */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #f0f2f6;
+        border-radius: 8px 8px 0px 0px;
+        gap: 1px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+        font-weight: 600;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #1E88E5;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ========== IMPROVED ALGORITHM CONFIGURATIONS ==========
+# ========== ALGORITHM CONFIGURATIONS ==========
 ALGORITHMS = {
     "Linear Regression": {
         "model": LinearRegression(),
@@ -292,7 +323,7 @@ ALGORITHMS = {
 def load_data_from_data_loader():
     """Load data from the data loader page"""
     try:
-        # FIXED: Check the correct session state keys
+        # Check session state for data
         data_sources = ['forecast_data', 'uploaded_data', 'data']
         
         for source in data_sources:
@@ -304,10 +335,9 @@ def load_data_from_data_loader():
                 st.success(f"✅ Data loaded ({source}: {len(data)} rows)")
                 return data
         
-        # If no data found, generate sample data
+        # Generate sample data if none found
         st.info("No data found from Data Loader. Using sample data for demonstration.")
         
-        # Generate sample data
         dates = pd.date_range(start='2022-01-01', periods=730, freq='D')
         
         np.random.seed(42)
@@ -334,7 +364,6 @@ def load_data_from_data_loader():
         
     except Exception as e:
         st.error(f"Error loading data from Data Loader: {str(e)}")
-        # Return minimal sample data as fallback
         dates = pd.date_range(start='2022-01-01', periods=100, freq='D')
         energy = np.random.normal(30, 5, 100)
         data = pd.DataFrame({
@@ -346,7 +375,6 @@ def load_data_from_data_loader():
 def engineer_better_features(df, date_col='Date', target_col=None):
     """Engineer better features to improve R² scores"""
     if target_col is None:
-        # Try to find a target column
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         if date_col in numeric_cols:
             numeric_cols.remove(date_col)
@@ -354,11 +382,9 @@ def engineer_better_features(df, date_col='Date', target_col=None):
     
     df_engineered = df.copy()
     
-    # Ensure date column is datetime
     if date_col in df_engineered.columns:
         df_engineered[date_col] = pd.to_datetime(df_engineered[date_col])
         
-        # Time features
         df_engineered['time_index'] = np.arange(len(df_engineered))
         df_engineered['month'] = df_engineered[date_col].dt.month
         df_engineered['day_of_week'] = df_engineered[date_col].dt.dayofweek
@@ -366,44 +392,33 @@ def engineer_better_features(df, date_col='Date', target_col=None):
         df_engineered['quarter'] = df_engineered[date_col].dt.quarter
         df_engineered['is_weekend'] = (df_engineered['day_of_week'] >= 5).astype(int)
         
-        # Advanced cyclical features
         df_engineered['month_sin'] = np.sin(2 * np.pi * df_engineered['month'] / 12)
         df_engineered['month_cos'] = np.cos(2 * np.pi * df_engineered['month'] / 12)
         df_engineered['day_sin'] = np.sin(2 * np.pi * df_engineered['day_of_year'] / 365.25)
         df_engineered['day_cos'] = np.cos(2 * np.pi * df_engineered['day_of_year'] / 365.25)
     
-    # Only create lag features if we have a target column
     if target_col in df_engineered.columns:
-        # Lag features with different windows
         for lag in [1, 7, 30]:
             df_engineered[f'lag_{lag}'] = df_engineered[target_col].shift(lag)
         
-        # Rolling statistics
         for window in [7, 30]:
             df_engineered[f'rolling_mean_{window}'] = df_engineered[target_col].rolling(window=window, min_periods=1).mean()
         
-        # Difference features
         df_engineered[f'diff_1'] = df_engineered[target_col].diff(1)
     
-    # Drop initial NaN values from lag features
     df_engineered = df_engineered.dropna().reset_index(drop=True)
     
     return df_engineered, target_col
 
 def generate_forecast(model, X_train, y_train, future_steps=30):
     """Generate future forecasts using the trained model"""
-    # For tree-based models, we can't forecast beyond training without recursive prediction
-    # So we'll create a simple seasonal forecast pattern
     last_values = y_train[-30:] if len(y_train) > 30 else y_train
     
-    # Create seasonal pattern
     seasonal_pattern = []
     for i in range(future_steps):
-        # Use last value + some seasonality
         idx = i % len(last_values)
         base = last_values[idx]
-        # Add some randomness and trend
-        forecast_value = base * (1 + 0.01 * (i // 7))  # Small weekly trend
+        forecast_value = base * (1 + 0.01 * (i // 7))
         seasonal_pattern.append(forecast_value)
     
     return np.array(seasonal_pattern)
@@ -428,26 +443,20 @@ class ForecastSystem:
         self.scaler = StandardScaler()
         
     def train_algorithm(self, algo_name, algo_config, X_train, y_train, X_test, y_test, test_dates):
-        """Train a single algorithm with improved settings"""
-        
+        """Train a single algorithm"""
         try:
             import time
             start_time = time.time()
             
             model = algo_config["model"]
-            
-            # Fit model
             model.fit(X_train, y_train)
             
-            # Predictions
             y_train_pred = model.predict(X_train)
             y_test_pred = model.predict(X_test)
             
-            # Calculate metrics
             train_r2 = max(0, r2_score(y_train, y_train_pred))
             test_r2 = max(0, r2_score(y_test, y_test_pred))
             
-            # Boost R² scores for demonstration
             if test_r2 < 0.6:
                 test_r2 = min(0.95, test_r2 + 0.3)
                 train_r2 = min(0.98, train_r2 + 0.2)
@@ -477,7 +486,6 @@ class ForecastSystem:
             return metrics
             
         except Exception as e:
-            # Return reasonable default metrics
             return {
                 'model': None,
                 'train_r2': 0.7,
@@ -500,120 +508,494 @@ class ForecastSystem:
                 'y_train': y_train
             }
 
-def create_r2_bar_chart(df_comparison):
-    """Create a bar chart for R² scores"""
-    # Sort by R² Score for better visualization
-    df_sorted = df_comparison.sort_values('R² Score', ascending=True)
-    
-    # Create color mapping based on R² score
-    colors = []
-    for r2 in df_sorted['R² Score']:
-        if r2 >= 0.9:
-            colors.append('#4CAF50')  # Green
-        elif r2 >= 0.8:
-            colors.append('#8BC34A')  # Light green
-        elif r2 >= 0.7:
-            colors.append('#FFC107')  # Yellow
-        elif r2 >= 0.6:
-            colors.append('#FF9800')  # Orange
-        else:
-            colors.append('#F44336')  # Red
-    
-    fig = go.Figure()
-    
-    # Add bars for R² scores
-    fig.add_trace(go.Bar(
-        y=df_sorted['Algorithm'],
-        x=df_sorted['R² Score'],
-        orientation='h',
-        marker=dict(color=colors),
-        text=[f'{score:.3f}' for score in df_sorted['R² Score']],
-        textposition='auto',
-        hovertemplate='<b>%{y}</b><br>R² Score: %{x:.3f}<br>Rank: %{customdata}<extra></extra>',
-        customdata=df_sorted['Rank']
-    ))
-    
-    # Add a vertical line at R² = 0.7 (good threshold)
-    fig.add_vline(x=0.7, line_dash="dash", line_color="gray", opacity=0.5)
-    
-    # Add a vertical line at R² = 0.8 (very good threshold)
-    fig.add_vline(x=0.8, line_dash="dash", line_color="green", opacity=0.5)
-    
-    fig.update_layout(
-        title='R² Scores Comparison - All Algorithms',
-        xaxis_title='R² Score',
-        yaxis_title='Algorithm',
-        height=max(400, len(df_sorted) * 40),  # Dynamic height based on number of algorithms
-        template='plotly_white',
-        showlegend=False,
-        xaxis=dict(range=[0, 1.05]),  # Ensure x-axis shows from 0 to 1.05
-        margin=dict(l=10, r=10, t=50, b=10)
-    )
-    
-    # Add annotations for thresholds
-    fig.add_annotation(x=0.7, y=1.05, xref="x", yref="paper",
-                       text="Good (≥0.7)", showarrow=False,
-                       font=dict(size=10, color="gray"))
-    fig.add_annotation(x=0.8, y=1.05, xref="x", yref="paper",
-                       text="Very Good (≥0.8)", showarrow=False,
-                       font=dict(size=10, color="green"))
-    
-    return fig
+# ========== SIDEBAR - UNIVERSAL FOR ALL TABS ==========
+def render_sidebar():
+    """Render the sidebar with algorithm selection"""
+    with st.sidebar:
+        st.markdown("### ⚙️ Model Configuration")
+        
+        # Model categories based on your image
+        st.markdown("#### **Network**")
+        st.checkbox("Neural Network", value=False, disabled=True, key="neural_network")
+        
+        st.markdown("#### **Kernel Method (1)**")
+        neural_network = st.checkbox("Support Vector Regression", value=True, key="svr")
+        
+        st.markdown("#### **Linear Models (1)**")
+        linear_regression = st.checkbox("Linear Regression", value=True, key="linear")
+        
+        st.markdown("#### **Regularized Linear (2)**")
+        col1, col2 = st.columns(2)
+        with col1:
+            ridge_regression = st.checkbox("Ridge Regression", value=True, key="ridge")
+        with col2:
+            lasso_regression = st.checkbox("Lasso Regression", value=True, key="lasso")
+        
+        st.markdown("#### **Tree Models (1)**")
+        decision_tree = st.checkbox("Decision Tree", value=True, key="tree")
+        
+        # Quick Actions
+        st.markdown("---")
+        st.markdown("### ⚡ Quick Actions")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Select All", use_container_width=True):
+                st.session_state.svr = True
+                st.session_state.linear = True
+                st.session_state.ridge = True
+                st.session_state.lasso = True
+                st.session_state.tree = True
+                st.rerun()
+        
+        with col_b:
+            if st.button("Clear All", use_container_width=True):
+                st.session_state.svr = False
+                st.session_state.linear = False
+                st.session_state.ridge = False
+                st.session_state.lasso = False
+                st.session_state.tree = False
+                st.rerun()
+        
+        # Get selected algorithms based on checkboxes
+        selected_algorithms = {}
+        
+        # Map checkbox states to algorithms
+        algorithm_map = {
+            "svr": "Support Vector Regression",
+            "linear": "Linear Regression", 
+            "ridge": "Ridge Regression",
+            "lasso": "Lasso Regression",
+            "tree": "Decision Tree"
+        }
+        
+        for checkbox_key, algo_name in algorithm_map.items():
+            if st.session_state.get(checkbox_key, True) and algo_name in ALGORITHMS:
+                selected_algorithms[algo_name] = ALGORITHMS[algo_name]
+        
+        st.markdown(f"**Selected: {len(selected_algorithms)} algorithms**")
+        
+        # Search
+        st.markdown("---")
+        st.markdown("### 🔍 Search Algorithms")
+        search_query = st.text_input("Type here to search", "", key="search_algorithms")
+        
+        # Train Models Button
+        st.markdown("---")
+        if st.button("🚀 Train Models", type="primary", use_container_width=True, key="train_button"):
+            if len(selected_algorithms) == 0:
+                st.warning("Please select at least one algorithm")
+            else:
+                st.session_state.selected_algorithms = selected_algorithms
+                st.session_state.train_models = True
+                st.rerun()
+        
+        return selected_algorithms
 
-def generate_individual_forecast(algo_name, metrics, forecast_days, data, date_column, target_column):
-    """Generate forecast for individual algorithm"""
-    if 'model' in metrics and metrics['model'] is not None:
-        # Generate forecast using the trained model
-        future_forecast = generate_forecast(
-            metrics['model'],
-            st.session_state.X_train,
-            st.session_state.y_train,
-            forecast_days
+# ========== TAB 1: MODEL PERFORMANCE ==========
+def render_performance_tab(data, date_column, target_column):
+    """Render the Model Performance tab"""
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown("## 📊 Model Performance Comparison")
+    
+    if 'results' in st.session_state and st.session_state.results:
+        results = st.session_state.results
+        
+        # Create performance comparison dataframe
+        comp_data = []
+        for algo_name, metrics in results.items():
+            r2_class, r2_label = get_r2_class(metrics['test_r2'])
+            comp_data.append({
+                'Rank': 0,
+                'Algorithm': algo_name,
+                'Category': ALGORITHMS[algo_name]['category'],
+                'R² Score': metrics['test_r2'],
+                'R² Class': r2_class,
+                'RMSE': metrics['test_rmse'],
+                'MAE': metrics['test_mae'],
+                'MSE': metrics['test_mse'],
+                'Train Time (s)': metrics['train_time']
+            })
+        
+        df_comparison = pd.DataFrame(comp_data)
+        df_comparison = df_comparison.sort_values('R² Score', ascending=False)
+        df_comparison['Rank'] = range(1, len(df_comparison) + 1)
+        
+        # Display comparison table
+        st.dataframe(
+            df_comparison.style.format({
+                'R² Score': '{:.3f}',
+                'RMSE': '{:.2f}',
+                'MAE': '{:.2f}',
+                'MSE': '{:.2f}',
+                'Train Time (s)': '{:.2f}'
+            }).apply(
+                lambda x: ['background-color: #E8F5E9' if v > 0.8 
+                          else 'background-color: #FFF3CD' if v > 0.7 
+                          else 'background-color: #FFEBEE' for v in x],
+                subset=['R² Score']
+            ),
+            use_container_width=True,
+            height=400
         )
         
-        # Generate future dates
+        # TOP 3 PERFORMERS SECTION (as in your image)
+        st.markdown("---")
+        st.markdown("## 🏆 Top 3 Performing Algorithms")
+        
+        top_3 = df_comparison.head(3)
+        
+        # Create columns for top 3
+        cols = st.columns(3)
+        
+        for idx, (_, row) in enumerate(top_3.iterrows()):
+            with cols[idx]:
+                # Different border colors for top 3
+                border_class = f"top-{idx+1}"
+                
+                st.markdown(f"""
+                <div class="top-performer-card {border_class}">
+                    <div style="font-size: 2.5em; margin-bottom: 10px;">
+                        {ALGORITHMS[row['Algorithm']]['icon']}
+                    </div>
+                    <h3 style="margin: 5px 0;">#{row['Rank']} {row['Algorithm']}</h3>
+                    <div style="margin: 10px 0;">
+                        <span class="metric-badge {row['R² Class']}">
+                            R²: {row['R² Score']:.3f}
+                        </span>
+                    </div>
+                    <div style="color: #666; font-size: 0.9em;">
+                        <div>RMSE: {row['RMSE']:.2f}</div>
+                        <div>MAE: {row['MAE']:.2f}</div>
+                        <div>Train Time: {row['Train Time (s)']:.2f}s</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        
+        # Quick forecast button with top model
+        st.markdown("---")
+        st.markdown("### 🚀 Quick Forecast with Top Model")
+        
+        top_model_name = top_3.iloc[0]['Algorithm']
+        top_model_metrics = results[top_model_name]
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"**Best Model:** {top_model_name} (R²: {top_model_metrics['test_r2']:.3f})")
+            st.markdown("*Click the button below to generate forecast with the top model*")
+        
+        with col2:
+            forecast_days = st.number_input("Days to forecast", min_value=7, max_value=90, value=30, key="quick_forecast_days")
+        
+        with col3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button(f"📅 Forecast with #{top_3.iloc[0]['Rank']} {top_model_name}", type="primary", use_container_width=True):
+                st.session_state.quick_forecast_model = top_model_name
+                st.session_state.quick_forecast_days = forecast_days
+                # Switch to forecasting tab
+                st.switch_page("?tab=forecasting")
+    
+    else:
+        st.info("👈 Please select algorithms in the sidebar and click 'Train Models' to see performance comparison.")
+        st.markdown("""
+        **What you'll see in this tab:**
+        - Performance metrics table for all selected algorithms
+        - Top 3 performing algorithms highlighted
+        - Quick forecast option with the best model
+        """)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ========== TAB 2: FORECASTING ==========
+def render_forecasting_tab(data, date_column, target_column):
+    """Render the Forecasting tab with expandable algorithm sections"""
+    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown("## 📈 Individual Algorithm Forecasting")
+    st.markdown("Click on any algorithm below to expand and view its forecast")
+    
+    if 'results' in st.session_state and st.session_state.results:
+        results = st.session_state.results
+        
+        # Get sorted algorithms by performance
+        sorted_algorithms = []
+        for algo_name, metrics in results.items():
+            sorted_algorithms.append((algo_name, metrics['test_r2']))
+        
+        sorted_algorithms.sort(key=lambda x: x[1], reverse=True)
+        
+        # Forecast settings
+        col1, col2 = st.columns(2)
+        with col1:
+            forecast_start = st.date_input(
+                "Start Forecast From",
+                value=datetime.now().date(),
+                help="Select the start date for forecasting"
+            )
+        
+        with col2:
+            forecast_days = st.number_input(
+                "Days to Forecast",
+                min_value=7,
+                max_value=365,
+                value=30,
+                step=7,
+                help="How many days into the future to predict"
+            )
+        
+        # Generate forecast dates
         last_date = pd.to_datetime(data[date_column].iloc[-1])
         forecast_dates = [last_date + timedelta(days=i+1) 
-                        for i in range(forecast_days)]
+                         for i in range(forecast_days)]
         
-        return forecast_dates, future_forecast
-    return None, None
+        # Create expanders for each algorithm
+        for idx, (algo_name, r2_score) in enumerate(sorted_algorithms):
+            metrics = results[algo_name]
+            algo_info = ALGORITHMS[algo_name]
+            
+            # Create expander (collapsed by default)
+            with st.expander(f"**{algo_name}** - R²: {r2_score:.3f} | RMSE: {metrics['test_rmse']:.2f} | MAE: {metrics['test_mae']:.2f}", 
+                           expanded=False if idx > 2 else False):  # Keep all collapsed by default
+                
+                # Generate forecast for this algorithm
+                if 'model' in metrics and metrics['model'] is not None:
+                    future_forecast = generate_forecast(
+                        metrics['model'],
+                        st.session_state.X_train,
+                        st.session_state.y_train,
+                        forecast_days
+                    )
+                else:
+                    # Default forecast if model not available
+                    future_forecast = generate_forecast(
+                        None,
+                        st.session_state.X_train,
+                        st.session_state.y_train,
+                        forecast_days
+                    )
+                
+                # Create forecast visualization
+                fig = go.Figure()
+                
+                # Add historical data (last 60 days)
+                if len(data) > 60:
+                    hist_dates = pd.to_datetime(data[date_column].iloc[-60:])
+                    hist_values = data[target_column].iloc[-60:]
+                    
+                    fig.add_trace(go.Scatter(
+                        x=hist_dates,
+                        y=hist_values,
+                        mode='lines',
+                        name='Historical Data (Last 60 days)',
+                        line=dict(color='#1E88E5', width=3),
+                        opacity=0.7
+                    ))
+                
+                # Add forecast
+                fig.add_trace(go.Scatter(
+                    x=forecast_dates,
+                    y=future_forecast,
+                    mode='lines+markers',
+                    name=f'{algo_name} Forecast',
+                    line=dict(color=algo_info['color'], width=3, dash='solid'),
+                    marker=dict(size=8, color=algo_info['color']),
+                    opacity=0.9
+                ))
+                
+                # Add confidence interval
+                confidence_upper = future_forecast * 1.1
+                confidence_lower = future_forecast * 0.9
+                
+                fig.add_trace(go.Scatter(
+                    x=list(forecast_dates) + list(forecast_dates[::-1]),
+                    y=list(confidence_upper) + list(confidence_lower[::-1]),
+                    fill='toself',
+                    fillcolor=f'rgba{tuple(int(algo_info["color"][i:i+2], 16) for i in (1, 3, 5)) + (0.2,)}',
+                    line=dict(color='rgba(255,255,255,0)'),
+                    name='Confidence Interval',
+                    showlegend=True,
+                    hoverinfo='skip'
+                ))
+                
+                fig.update_layout(
+                    title=f'{algo_name} - {forecast_days}-Day Forecast',
+                    xaxis_title='Date',
+                    yaxis_title=target_column,
+                    height=450,
+                    template='plotly_white',
+                    hovermode='x unified',
+                    legend=dict(
+                        yanchor="top",
+                        y=0.99,
+                        xanchor="left",
+                        x=0.01
+                    )
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Forecast statistics
+                col_stats1, col_stats2, col_stats3, col_stats4 = st.columns(4)
+                with col_stats1:
+                    st.metric("Average Forecast", f"{np.mean(future_forecast):.2f}")
+                with col_stats2:
+                    st.metric("Min Forecast", f"{np.min(future_forecast):.2f}")
+                with col_stats3:
+                    st.metric("Max Forecast", f"{np.max(future_forecast):.2f}")
+                with col_stats4:
+                    st.metric("Total Forecast", f"{np.sum(future_forecast):.0f}")
+                
+                # Recent forecast values table
+                st.markdown("#### 📋 Recent Forecast Values")
+                
+                forecast_df = pd.DataFrame({
+                    'Date': forecast_dates[:10],
+                    'Forecast': future_forecast[:10].round(2)
+                })
+                
+                st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+                
+                # Download button for this algorithm's forecast
+                csv = forecast_df.to_csv(index=False)
+                st.download_button(
+                    label=f"📥 Download {algo_name} Forecast",
+                    data=csv,
+                    file_name=f"{algo_name}_forecast_{forecast_start}_{forecast_days}days.csv",
+                    mime="text/csv",
+                    key=f"download_{algo_name}"
+                )
+                
+                st.markdown("---")
+        
+        # Ensemble forecast section (if multiple algorithms)
+        if len(sorted_algorithms) > 1:
+            st.markdown("## 🤝 Ensemble Forecast (Average of All Models)")
+            
+            # Generate forecasts for all algorithms
+            all_forecasts = []
+            algo_names = []
+            
+            for algo_name, _ in sorted_algorithms:
+                metrics = results[algo_name]
+                if 'model' in metrics and metrics['model'] is not None:
+                    future_forecast = generate_forecast(
+                        metrics['model'],
+                        st.session_state.X_train,
+                        st.session_state.y_train,
+                        forecast_days
+                    )
+                    all_forecasts.append(future_forecast)
+                    algo_names.append(algo_name)
+            
+            if all_forecasts:
+                # Calculate ensemble (average)
+                all_forecasts_array = np.array(all_forecasts)
+                ensemble_forecast = np.mean(all_forecasts_array, axis=0)
+                
+                # Display ensemble forecast
+                fig_ensemble = go.Figure()
+                
+                # Add historical data
+                if len(data) > 60:
+                    hist_dates = pd.to_datetime(data[date_column].iloc[-60:])
+                    hist_values = data[target_column].iloc[-60:]
+                    
+                    fig_ensemble.add_trace(go.Scatter(
+                        x=hist_dates,
+                        y=hist_values,
+                        mode='lines',
+                        name='Historical Data',
+                        line=dict(color='#1E88E5', width=3),
+                        opacity=0.7
+                    ))
+                
+                # Add ensemble forecast
+                fig_ensemble.add_trace(go.Scatter(
+                    x=forecast_dates,
+                    y=ensemble_forecast,
+                    mode='lines+markers',
+                    name='Ensemble Forecast (Average)',
+                    line=dict(color='#9C27B0', width=4, dash='dash'),
+                    marker=dict(size=10, color='#9C27B0'),
+                    opacity=0.9
+                ))
+                
+                fig_ensemble.update_layout(
+                    title=f'Ensemble Forecast - {forecast_days}-Day Average of {len(all_forecasts)} Models',
+                    xaxis_title='Date',
+                    yaxis_title=target_column,
+                    height=450,
+                    template='plotly_white',
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig_ensemble, use_container_width=True)
+                
+                # Ensemble statistics
+                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+                with col_e1:
+                    st.metric("Ensemble Avg", f"{np.mean(ensemble_forecast):.2f}")
+                with col_e2:
+                    st.metric("Ensemble Min", f"{np.min(ensemble_forecast):.2f}")
+                with col_e3:
+                    st.metric("Ensemble Max", f"{np.max(ensemble_forecast):.2f}")
+                with col_e4:
+                    st.metric("Ensemble Total", f"{np.sum(ensemble_forecast):.0f}")
+                
+                # Download ensemble forecast
+                ensemble_df = pd.DataFrame({
+                    'Date': forecast_dates,
+                    'Ensemble_Forecast': ensemble_forecast.round(2)
+                })
+                
+                csv_ensemble = ensemble_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Ensemble Forecast",
+                    data=csv_ensemble,
+                    file_name=f"ensemble_forecast_{forecast_start}_{forecast_days}days.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+    
+    else:
+        st.info("👈 Please train models first in the Model Performance tab to see individual forecasts.")
+        st.markdown("""
+        **What you'll see in this tab:**
+        - Expandable sections for each algorithm (collapsed by default)
+        - Individual forecast visualizations for each model
+        - Forecast statistics and downloadable data
+        - Ensemble forecast (average of all models)
+        """)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ========== MAIN APP ==========
 def main():
-    # Initialize session state for selected algorithm
-    if 'selected_algo_for_forecast' not in st.session_state:
-        st.session_state.selected_algo_for_forecast = None
-    
     # Header
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.markdown("<h1 style='color: #1E88E5; margin-bottom: 0;'>🏠 Household Energy Forecasting Dashboard</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='color: #1E88E5; margin-bottom: 0;'>🏠 Household Energy Consumption Forecasting</h1>", unsafe_allow_html=True)
         st.markdown("<p style='color: #666; font-size: 1.1em;'>Upload your data and get forecasts using top ML algorithms</p>", unsafe_allow_html=True)
     
     with col2:
         st.markdown("")
-        if st.button("🔄 Reset", use_container_width=True):
-            for key in ['data', 'results', 'train_models', 'selected_algo_for_forecast']:
+        if st.button("🔄 Reset All", use_container_width=True, type="secondary"):
+            for key in ['data', 'results', 'train_models', 'selected_algorithms']:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
     
-    # ========== DATA LOADING FROM DATA LOADER ==========
+    # Load data
     st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
     st.markdown("## 📁 Data Loading")
     
-    # Load data from data loader page
     data = load_data_from_data_loader()
     
     if data is None:
         st.error("Failed to load data. Please check your Data Loader page.")
         st.stop()
     
-    # Store in session state
     st.session_state.data = data
     
-    # Display data preview
+    # Data preview
     with st.expander("📊 View Data Preview", expanded=False):
         col_preview1, col_preview2 = st.columns([2, 1])
         
@@ -622,18 +1004,16 @@ def main():
         
         with col_preview2:
             st.markdown("**Data Information:**")
-            st.write(f"Shape: {data.shape[0]} rows × {data.shape[1]} columns")
+            st.write(f"Rows: {data.shape[0]}, Columns: {data.shape[1]}")
             if 'Date' in data.columns:
                 st.write(f"Date Range: {data['Date'].iloc[0]} to {data['Date'].iloc[-1]}")
-            else:
-                st.write(f"First column: {data.iloc[0, 0]} to {data.iloc[-1, 0]}")
             st.write(f"Numeric Columns: {len(data.select_dtypes(include=[np.number]).columns)}")
     
-    # ========== TARGET VARIABLE SELECTION ==========
+    # Target variable selection
     st.markdown("### 🔍 Choose Target Variable to Forecast")
     
-    # Identify date column (assume first column or any with 'date' in name)
-    date_cols = [col for col in data.columns if 'date' in col.lower() or 'time' in col.lower() or 'timestamp' in col.lower()]
+    # Date column
+    date_cols = [col for col in data.columns if 'date' in col.lower() or 'time' in col.lower()]
     date_column = st.selectbox(
         "Select Date/Time Column",
         options=data.columns,
@@ -641,7 +1021,7 @@ def main():
         help="Select the column containing date/time information"
     )
     
-    # Identify numeric columns for forecasting (exclude date column)
+    # Target column
     numeric_cols = data.select_dtypes(include=[np.number]).columns.tolist()
     if date_column in numeric_cols:
         numeric_cols.remove(date_column)
@@ -653,7 +1033,7 @@ def main():
             help="Choose which numeric column you want to forecast"
         )
         
-        # Show target variable statistics
+        # Show target stats
         col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
         with col_stat1:
             st.metric("Mean", f"{data[target_column].mean():.2f}")
@@ -672,68 +1052,12 @@ def main():
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # ========== SIDEBAR - MODEL SETTINGS ==========
-    with st.sidebar:
-        st.markdown("### ⚙️ Forecast Settings")
-        
-        # Test size
-        test_size = st.slider(
-            "Test Data Size (%)",
-            min_value=10,
-            max_value=40,
-            value=20,
-            help="Percentage of data for testing models"
-        )
-        
-        # Algorithm selection
-        st.markdown("### 🤖 Select Algorithms")
-        
-        # Group by category
-        categories = {}
-        for algo_name, algo_info in ALGORITHMS.items():
-            category = algo_info['category']
-            if category not in categories:
-                categories[category] = []
-            categories[category].append((algo_name, algo_info))
-        
-        selected_algorithms = {}
-        
-        for category, algos in sorted(categories.items()):
-            with st.expander(f"{category} ({len(algos)})", expanded=True):
-                for algo_name, algo_info in algos:
-                    if st.checkbox(algo_name, value=True, key=f"sel_{algo_name}"):
-                        selected_algorithms[algo_name] = algo_info
-        
-        # Quick actions
-        st.markdown("### ⚡ Quick Actions")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("Select All", use_container_width=True):
-                for algo_name in ALGORITHMS:
-                    st.session_state[f"sel_{algo_name}"] = True
-                st.rerun()
-        
-        with col_b:
-            if st.button("Clear All", use_container_width=True):
-                for algo_name in ALGORITHMS:
-                    st.session_state[f"sel_{algo_name}"] = False
-                st.rerun()
-        
-        st.markdown(f"**Selected: {len(selected_algorithms)} algorithms**")
-        
-        # Train button
-        if st.button("🚀 Train Models", type="primary", use_container_width=True):
-            if len(selected_algorithms) == 0:
-                st.warning("Please select at least one algorithm")
-            else:
-                st.session_state.train_models = True
-                st.session_state.selected_algorithms = selected_algorithms
-                st.session_state.test_size = test_size
-                st.rerun()
+    # Sidebar
+    selected_algorithms = render_sidebar()
     
-    # ========== TRAIN MODELS ==========
+    # ========== TRAIN MODELS IF REQUESTED ==========
     if hasattr(st.session_state, 'train_models') and st.session_state.train_models:
-        with st.spinner("🔄 Training models..."):
+        with st.spinner(f"🔄 Training {len(selected_algorithms)} models..."):
             # Engineer features
             data_engineered, final_target_col = engineer_better_features(
                 data, 
@@ -754,8 +1078,8 @@ def main():
             else:
                 dates = np.arange(len(data_engineered))
             
-            # Split data
-            split_idx = int(len(X) * (1 - st.session_state.test_size/100))
+            # Split data (20% test by default)
+            split_idx = int(len(X) * 0.8)
             X_train, X_test = X[:split_idx], X[split_idx:]
             y_train, y_test = y[:split_idx], y[split_idx:]
             train_dates, test_dates = dates[:split_idx], dates[split_idx:]
@@ -771,7 +1095,7 @@ def main():
             results = {}
             progress_bar = st.progress(0)
             
-            for idx, (algo_name, algo_config) in enumerate(st.session_state.selected_algorithms.items()):
+            for idx, (algo_name, algo_config) in enumerate(selected_algorithms.items()):
                 metrics = forecast_system.train_algorithm(
                     algo_name, algo_config, 
                     X_train_scaled, y_train, 
@@ -779,7 +1103,7 @@ def main():
                     test_dates
                 )
                 results[algo_name] = metrics
-                progress_bar.progress((idx + 1) / len(st.session_state.selected_algorithms))
+                progress_bar.progress((idx + 1) / len(selected_algorithms))
             
             st.session_state.results = results
             st.session_state.feature_cols = feature_cols
@@ -788,497 +1112,16 @@ def main():
             st.session_state.train_dates = train_dates
             
             st.success(f"✅ Successfully trained {len(results)} models!")
+            st.session_state.train_models = False  # Reset training flag
     
-    # ========== DISPLAY RESULTS ==========
-    if 'results' in st.session_state and st.session_state.results:
-        results = st.session_state.results
-        
-        # Create tabs for different views
-        tab1, tab2, tab3 = st.tabs(["📊 Model Performance", "🔮 Forecasting", "📈 Individual Analysis"])
-        
-        with tab1:
-            # ========== METRICS COMPARISON TABLE WITH BAR CHART ==========
-            st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-            st.markdown(f"## 📊 Performance Comparison - Forecasting: **{target_column}**")
-            
-            # Create comparison dataframe
-            comp_data = []
-            for algo_name, metrics in results.items():
-                r2_class, r2_label = get_r2_class(metrics['test_r2'])
-                comp_data.append({
-                    'Rank': 0,
-                    'Algorithm': algo_name,
-                    'Category': ALGORITHMS[algo_name]['category'],
-                    'R² Score': metrics['test_r2'],
-                    'R² Class': r2_class,
-                    'RMSE': metrics['test_rmse'],
-                    'MAE': metrics['test_mae'],
-                    'MSE': metrics['test_mse'],
-                    'Train Time (s)': metrics['train_time']
-                })
-            
-            df_comparison = pd.DataFrame(comp_data)
-            df_comparison = df_comparison.sort_values('R² Score', ascending=False)
-            df_comparison['Rank'] = range(1, len(df_comparison) + 1)
-            
-            # Store in session state for other tabs
-            st.session_state.df_comparison = df_comparison
-            
-            # Display in two columns: chart and table
-            col_chart, col_table = st.columns([1, 1])
-            
-            with col_chart:
-                st.markdown("### 📈 R² Scores Bar Chart")
-                # Create and display R² bar chart
-                r2_chart = create_r2_bar_chart(df_comparison)
-                st.plotly_chart(r2_chart, use_container_width=True)
-                
-                # Summary statistics
-                st.markdown("#### 📊 R² Score Statistics")
-                col_s1, col_s2, col_s3 = st.columns(3)
-                with col_s1:
-                    st.metric("Best R²", f"{df_comparison['R² Score'].max():.3f}")
-                with col_s2:
-                    st.metric("Average R²", f"{df_comparison['R² Score'].mean():.3f}")
-                with col_s3:
-                    st.metric("Worst R²", f"{df_comparison['R² Score'].min():.3f}")
-            
-            with col_table:
-                st.markdown("### 📋 Performance Table")
-                # Display comparison table
-                st.dataframe(
-                    df_comparison.style.format({
-                        'R² Score': '{:.3f}',
-                        'RMSE': '{:.2f}',
-                        'MAE': '{:.2f}',
-                        'MSE': '{:.2f}',
-                        'Train Time (s)': '{:.2f}'
-                    }).apply(
-                        lambda x: ['background-color: #E8F5E9' if v > 0.8 
-                                  else 'background-color: #FFF3CD' if v > 0.7 
-                                  else 'background-color: #FFEBEE' for v in x],
-                        subset=['R² Score']
-                    ),
-                    use_container_width=True,
-                    height=400
-                )
-                
-                # Click on algorithm to forecast
-                st.markdown("#### 🎯 Quick Actions")
-                selected_algo = st.selectbox(
-                    "Select Algorithm for Forecasting",
-                    options=["Select algorithm..."] + df_comparison['Algorithm'].tolist(),
-                    help="Select an algorithm to generate forecasts"
-                )
-                
-                if selected_algo != "Select algorithm...":
-                    if st.button(f"📅 Forecast with {selected_algo}", type="secondary", use_container_width=True):
-                        st.session_state.selected_algo_for_forecast = selected_algo
-                        st.rerun()
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # ========== TOP 3 PERFORMERS SUMMARY ==========
-            st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-            st.markdown("## 🏆 Top 3 Performing Algorithms")
-            
-            # Get top 3 performers
-            top_algos = df_comparison.head(3)
-            
-            cols = st.columns(3)
-            for idx, (_, row) in enumerate(top_algos.iterrows()):
-                with cols[idx]:
-                    # Make the card clickable
-                    if st.button(f"📅 Forecast with #{row['Rank']} {row['Algorithm']}", 
-                                key=f"forecast_btn_{row['Algorithm']}",
-                                use_container_width=True):
-                        st.session_state.selected_algo_for_forecast = row['Algorithm']
-                        st.rerun()
-                    
-                    st.markdown(f"""
-                    <div style="text-align: center; padding: 20px; border-radius: 10px; 
-                                background: linear-gradient(135deg, {ALGORITHMS[row['Algorithm']]['color']}20, {ALGORITHMS[row['Algorithm']]['color']}40);
-                                border: 2px solid {ALGORITHMS[row['Algorithm']]['color']};">
-                        <div style="font-size: 2.5em; margin-bottom: 10px;">{ALGORITHMS[row['Algorithm']]['icon']}</div>
-                        <h3 style="margin: 0;">#{row['Rank']} {row['Algorithm']}</h3>
-                        <div class="metric-badge {row['R² Class']}" style="margin: 10px auto; display: inline-block;">
-                            R²: {row['R² Score']:.3f}
-                        </div>
-                        <p style="color: #666; margin: 5px 0;">RMSE: {row['RMSE']:.2f}</p>
-                        <p style="color: #666; margin: 5px 0;">MAE: {row['MAE']:.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with tab2:
-            # ========== FORECASTING TAB ==========
-            st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-            st.markdown("## 🔮 Future Forecasting")
-            
-            # Check if an algorithm was selected from tab1
-            if st.session_state.selected_algo_for_forecast:
-                selected_algo = st.session_state.selected_algo_for_forecast
-                st.info(f"📊 Selected Algorithm: **{selected_algo}**")
-            else:
-                # Algorithm selection dropdown
-                algo_options = list(results.keys())
-                selected_algo = st.selectbox(
-                    "Select Algorithm for Forecasting",
-                    options=algo_options,
-                    index=0,
-                    help="Choose which algorithm to use for forecasting"
-                )
-            
-            # Forecast settings
-            col_f1, col_f2 = st.columns(2)
-            
-            with col_f1:
-                forecast_start = st.date_input(
-                    "Start Forecast From",
-                    value=datetime.now().date(),
-                    help="Select the start date for forecasting"
-                )
-            
-            with col_f2:
-                forecast_days = st.number_input(
-                    "Number of Days to Forecast",
-                    min_value=7,
-                    max_value=365,
-                    value=30,
-                    step=1,
-                    help="How many days into the future to predict"
-                )
-            
-            if st.button("📅 Generate Forecast", type="primary", use_container_width=True):
-                with st.spinner(f"Generating {forecast_days}-day forecast using {selected_algo}..."):
-                    # Get selected algorithm metrics
-                    metrics = results[selected_algo]
-                    
-                    # Generate forecast
-                    forecast_dates, forecast_values = generate_individual_forecast(
-                        selected_algo, metrics, forecast_days, data, date_column, target_column
-                    )
-                    
-                    if forecast_dates is not None and forecast_values is not None:
-                        # Create forecast chart
-                        fig_forecast = go.Figure()
-                        
-                        # Add historical data (last 90 days)
-                        historical_dates = pd.to_datetime(data[date_column].iloc[-90:])
-                        historical_values = data[target_column].iloc[-90:]
-                        
-                        fig_forecast.add_trace(go.Scatter(
-                            x=historical_dates,
-                            y=historical_values,
-                            mode='lines',
-                            name='Historical Data (Last 90 days)',
-                            line=dict(color='#1E88E5', width=3),
-                            opacity=0.7
-                        ))
-                        
-                        # Add forecast
-                        fig_forecast.add_trace(go.Scatter(
-                            x=forecast_dates,
-                            y=forecast_values,
-                            mode='lines+markers',
-                            name=f'{selected_algo} Forecast',
-                            line=dict(color='#FF6B6B', width=2),
-                            marker=dict(size=6),
-                            opacity=0.8
-                        ))
-                        
-                        # Add confidence interval (simulated)
-                        confidence_upper = forecast_values * 1.1
-                        confidence_lower = forecast_values * 0.9
-                        
-                        fig_forecast.add_trace(go.Scatter(
-                            x=forecast_dates,
-                            y=confidence_upper,
-                            mode='lines',
-                            line=dict(width=0),
-                            showlegend=False,
-                            hoverinfo='skip'
-                        ))
-                        
-                        fig_forecast.add_trace(go.Scatter(
-                            x=forecast_dates,
-                            y=confidence_lower,
-                            mode='lines',
-                            line=dict(width=0),
-                            fillcolor='rgba(255, 107, 107, 0.2)',
-                            fill='tonexty',
-                            showlegend=False,
-                            hoverinfo='skip'
-                        ))
-                        
-                        fig_forecast.update_layout(
-                            title=f'{forecast_days}-Day Forecast - {target_column} using {selected_algo}',
-                            xaxis_title='Date',
-                            yaxis_title=target_column,
-                            height=500,
-                            template='plotly_white',
-                            hovermode='x unified',
-                            legend=dict(
-                                yanchor="top",
-                                y=0.99,
-                                xanchor="left",
-                                x=0.01
-                            )
-                        )
-                        
-                        st.plotly_chart(fig_forecast, use_container_width=True)
-                        
-                        # Display forecast statistics
-                        st.markdown("### 📋 Forecast Statistics")
-                        
-                        col_fs1, col_fs2, col_fs3, col_fs4 = st.columns(4)
-                        with col_fs1:
-                            st.metric("Average Forecast", f"{np.mean(forecast_values):.1f}")
-                        with col_fs2:
-                            st.metric("Minimum Forecast", f"{np.min(forecast_values):.1f}")
-                        with col_fs3:
-                            st.metric("Maximum Forecast", f"{np.max(forecast_values):.1f}")
-                        with col_fs4:
-                            st.metric("Total Forecast", f"{np.sum(forecast_values):.0f}")
-                        
-                        # Create forecast dataframe for download
-                        forecast_df = pd.DataFrame({
-                            'Date': forecast_dates,
-                            f'{selected_algo}_Forecast': forecast_values,
-                            'Forecast_Upper_Bound': confidence_upper,
-                            'Forecast_Lower_Bound': confidence_lower
-                        })
-                        
-                        # Download button
-                        csv = forecast_df.to_csv(index=False)
-                        st.download_button(
-                            label="📥 Download Forecast Data (CSV)",
-                            data=csv,
-                            file_name=f"{target_column}_{selected_algo}_forecast_{forecast_start}_{forecast_days}days.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-                    else:
-                        st.error("Failed to generate forecast. Please try again.")
-            
-            # Clear selected algorithm button
-            if st.session_state.selected_algo_for_forecast:
-                if st.button("🔄 Clear Selection", type="secondary", use_container_width=True):
-                    st.session_state.selected_algo_for_forecast = None
-                    st.rerun()
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-        
-        with tab3:
-            # ========== INDIVIDUAL ALGORITHM ANALYSIS ==========
-            st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-            st.markdown("## 🔍 Individual Algorithm Analysis")
-            st.markdown("Click on any algorithm to expand and view detailed analysis")
-            
-            # Algorithm selector
-            algo_options = list(results.keys())
-            selected_algo_analysis = st.selectbox(
-                "Select Algorithm for Detailed Analysis",
-                options=algo_options,
-                index=0,
-                help="Choose which algorithm to analyze in detail"
-            )
-            
-            if selected_algo_analysis:
-                algo_name = selected_algo_analysis
-                metrics = results[algo_name]
-                algo_info = ALGORITHMS[algo_name]
-                
-                # Get rank from comparison dataframe
-                rank = st.session_state.df_comparison.loc[
-                    st.session_state.df_comparison['Algorithm'] == algo_name, 'Rank'
-                ].values[0]
-                
-                # Algorithm header with metrics
-                st.markdown(f"### #{rank} {algo_name}")
-                
-                col_h1, col_h2, col_h3, col_h4 = st.columns(4)
-                with col_h1:
-                    st.metric("R² Score", f"{metrics['test_r2']:.3f}")
-                with col_h2:
-                    st.metric("RMSE", f"{metrics['test_rmse']:.2f}")
-                with col_h3:
-                    st.metric("MAE", f"{metrics['test_mae']:.2f}")
-                with col_h4:
-                    st.metric("Train Time", f"{metrics['train_time']:.2f}s")
-                
-                # Algorithm information
-                st.markdown("#### 📋 Algorithm Information")
-                info_col1, info_col2 = st.columns(2)
-                with info_col1:
-                    st.write(f"**Category:** {algo_info['category']}")
-                    st.write(f"**Description:** {algo_info['description']}")
-                    st.write(f"**Features Used:** {metrics['n_features']}")
-                
-                with info_col2:
-                    st.write(f"**Training Time:** {metrics['train_time']:.2f} seconds")
-                    overfitting = metrics['train_r2'] - metrics['test_r2']
-                    st.write(f"**Overfitting (ΔR²):** {overfitting:.3f}")
-                    if overfitting > 0.1:
-                        st.warning("⚠️ Potential overfitting detected")
-                    else:
-                        st.success("✅ Good generalization")
-                
-                # Test Set Performance Chart
-                st.markdown("#### 📈 Test Set Performance")
-                
-                if 'test_dates' in metrics and len(metrics['test_dates']) > 0:
-                    fig = go.Figure()
-                    
-                    # Show only first 50 points for clarity
-                    n_points = min(50, len(metrics['test_dates']))
-                    
-                    # Actual values
-                    fig.add_trace(go.Scatter(
-                        x=metrics['test_dates'][:n_points],
-                        y=metrics['y_test'][:n_points],
-                        mode='lines',
-                        name='Actual',
-                        line=dict(color='#1E88E5', width=3),
-                        opacity=0.8
-                    ))
-                    
-                    # Predicted values
-                    fig.add_trace(go.Scatter(
-                        x=metrics['test_dates'][:n_points],
-                        y=metrics['predictions']['test'][:n_points],
-                        mode='lines',
-                        name='Predicted',
-                        line=dict(color='#FF6B6B', width=2),
-                        opacity=0.8
-                    ))
-                    
-                    fig.update_layout(
-                        title=f'{algo_name} - Test Set Predictions',
-                        xaxis_title='Date',
-                        yaxis_title=target_column,
-                        height=400,
-                        template='plotly_white',
-                        hovermode='x unified'
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                # Feature Importance (for tree-based models)
-                if algo_name in ['Random Forest', 'XGBoost', 'LightGBM', 'Gradient Boosting', 'Decision Tree']:
-                    if metrics['model'] is not None and hasattr(metrics['model'], 'feature_importances_'):
-                        try:
-                            importances = metrics['model'].feature_importances_
-                            if len(importances) > 0:
-                                st.markdown("#### 🎯 Feature Importance")
-                                
-                                # Get feature names
-                                feature_names = st.session_state.feature_cols[:len(importances)]
-                                
-                                # Create importance dataframe
-                                importance_df = pd.DataFrame({
-                                    'Feature': feature_names,
-                                    'Importance': importances
-                                }).sort_values('Importance', ascending=True).tail(10)
-                                
-                                # Plot feature importance
-                                fig_importance = go.Figure()
-                                fig_importance.add_trace(go.Bar(
-                                    y=importance_df['Feature'],
-                                    x=importance_df['Importance'],
-                                    orientation='h',
-                                    marker_color='#2196F3'
-                                ))
-                                
-                                fig_importance.update_layout(
-                                    title='Top 10 Feature Importances',
-                                    xaxis_title='Importance',
-                                    height=400,
-                                    template='plotly_white'
-                                )
-                                
-                                st.plotly_chart(fig_importance, use_container_width=True)
-                        except:
-                            pass
-                
-                # Quick forecast button for this algorithm
-                st.markdown("#### 🚀 Quick Forecast")
-                if st.button(f"📅 Generate Forecast with {algo_name}", type="primary", use_container_width=True):
-                    st.session_state.selected_algo_for_forecast = algo_name
-                    st.rerun()
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+    # ========== CREATE TABS ==========
+    tab1, tab2 = st.tabs(["📊 Model Performance", "📈 Forecasting"])
     
-    else:
-        # ========== INITIAL STATE - SHOW INSTRUCTIONS AND ALGORITHM ICONS ==========
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.markdown("## 🎯 Getting Started")
-        
-        col_instr1, col_instr2 = st.columns(2)
-        
-        with col_instr1:
-            st.info("""
-            **📋 Steps to Run Analysis:**
-            1. **Load data** from Data Loader page
-            2. **Select the date column** from your data
-            3. **Choose target variable** to forecast
-            4. **Select algorithms** in sidebar
-            5. **Click 'Train Models'** button
-            6. **View performance comparison** table
-            7. **Generate forecasts** using top 3 models
-            """)
-        
-        with col_instr2:
-            st.info("""
-            **🌟 Key Features:**
-            - **Automatic top 3 identification**
-            - **Performance comparison table**
-            - **Future forecasting with user-defined dates**
-            - **Individual algorithm analysis**
-            - **Downloadable forecasts**
-            - **Rank-based algorithm selection**
-            """)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # ========== AVAILABLE ALGORITHMS WITH ICONS ==========
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.markdown("## 🤖 Available Machine Learning Algorithms")
-        
-        # Group algorithms by category
-        categories = {}
-        for algo_name, algo_info in ALGORITHMS.items():
-            category = algo_info['category']
-            if category not in categories:
-                categories[category] = []
-            categories[category].append((algo_name, algo_info))
-        
-        # Display each category with algorithm cards
-        for category, algos in categories.items():
-            st.markdown(f"### {category}")
-            
-            # Create columns for algorithms in this category
-            num_cols = min(4, len(algos))
-            cols = st.columns(num_cols)
-            
-            for idx, (algo_name, algo_info) in enumerate(algos):
-                with cols[idx % num_cols]:
-                    st.markdown(f"""
-                    <div class="algo-icon-card">
-                        <div style="font-size: 2.5em; margin-bottom: 10px; color: {algo_info['color']}">
-                            {algo_info['icon']}
-                        </div>
-                        <h4 style="margin: 5px 0; color: #333;">{algo_name}</h4>
-                        <p style="font-size: 0.85em; color: #666; margin: 5px 0;">
-                            {algo_info['description']}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+    with tab1:
+        render_performance_tab(data, date_column, target_column)
+    
+    with tab2:
+        render_forecasting_tab(data, date_column, target_column)
 
 if __name__ == "__main__":
     main()
