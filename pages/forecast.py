@@ -1,704 +1,842 @@
+# pages/forecast.py
+import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import streamlit as st
+import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime, timedelta
-from sklearn.model_selection import train_test_split, TimeSeriesSplit, GridSearchCV
-from sklearn.preprocessing import StandardScaler, PolynomialFeatures
-from sklearn.metrics import r2_score, mean_absolute_percentage_error, mean_squared_error
-from sklearn.linear_model import LinearRegression, Ridge, Lasso
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.neural_network import MLPRegressor
-from sklearn.pipeline import Pipeline
-import xgboost as xgb
 import warnings
 warnings.filterwarnings('ignore')
 
-# Set page config at the very beginning
+# ML Libraries
+from sklearn.model_selection import train_test_split, TimeSeriesSplit
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.neural_network import MLPRegressor
+import xgboost as xgb
+
+# Time Series Models
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+# Note: Prophet requires separate install: pip install prophet
+
 st.set_page_config(
-    page_title="Household Energy Forecast Dashboard",
-    page_icon="⚡",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Energy Consumption Forecast",
+    page_icon="🔮",
+    layout="wide"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1E88E5;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .sub-header {
-        font-size: 1.5rem;
-        color: #424242;
-        margin-bottom: 1rem;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 5px solid #1E88E5;
-        margin-bottom: 1rem;
-    }
-    .stButton>button {
-        width: 100%;
-        background-color: #1E88E5;
+    .forecast-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
+        padding: 25px;
+        border-radius: 15px;
+        margin: 10px 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
-    .stSelectbox, .stNumberInput, .stDateInput {
-        margin-bottom: 1rem;
+    .model-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 10px 0;
+        border: 2px solid #e0e0e0;
+        transition: transform 0.3s;
     }
+    .model-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .metric-badge {
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.8em;
+        margin: 2px;
+    }
+    .badge-green { background: #d4edda; color: #155724; }
+    .badge-yellow { background: #fff3cd; color: #856404; }
+    .badge-red { background: #f8d7da; color: #721c24; }
 </style>
 """, unsafe_allow_html=True)
 
-class EnergyForecastDashboard:
+# ========== UTILITY FUNCTIONS ==========
+def engineer_time_features(df, date_col='Date', target_col='Energy_Consumption_kWh'):
+    """Engineer comprehensive time-based features to capture seasonality"""
+    
+    df_engineered = df.copy()
+    
+    # Ensure date is datetime
+    df_engineered[date_col] = pd.to_datetime(df_engineered[date_col])
+    
+    # 1. TIME INDEX (Trend feature)
+    df_engineered['time_index'] = np.arange(len(df_engineered))
+    
+    # 2. DATE COMPONENTS
+    df_engineered['year'] = df_engineered[date_col].dt.year
+    df_engineered['month'] = df_engineered[date_col].dt.month
+    df_engineered['day'] = df_engineered[date_col].dt.day
+    df_engineered['day_of_week'] = df_engineered[date_col].dt.dayofweek
+    df_engineered['day_of_year'] = df_engineered[date_col].dt.dayofyear
+    df_engineered['week_of_year'] = df_engineered[date_col].dt.isocalendar().week
+    df_engineered['quarter'] = df_engineered[date_col].dt.quarter
+    df_engineered['is_weekend'] = (df_engineered['day_of_week'] >= 5).astype(int)
+    
+    # 3. CYCLICAL FEATURES (SIN/COS) - MOST IMPORTANT FOR SEASONALITY!
+    # Monthly seasonality
+    df_engineered['month_sin'] = np.sin(2 * np.pi * df_engineered['month'] / 12)
+    df_engineered['month_cos'] = np.cos(2 * np.pi * df_engineered['month'] / 12)
+    
+    # Weekly seasonality
+    df_engineered['week_sin'] = np.sin(2 * np.pi * df_engineered['week_of_year'] / 52)
+    df_engineered['week_cos'] = np.cos(2 * np.pi * df_engineered['week_of_year'] / 52)
+    
+    # Daily seasonality (within year)
+    df_engineered['day_sin'] = np.sin(2 * np.pi * df_engineered['day_of_year'] / 365.25)
+    df_engineered['day_cos'] = np.cos(2 * np.pi * df_engineered['day_of_year'] / 365.25)
+    
+    # Day of week seasonality
+    df_engineered['dow_sin'] = np.sin(2 * np.pi * df_engineered['day_of_week'] / 7)
+    df_engineered['dow_cos'] = np.cos(2 * np.pi * df_engineered['day_of_week'] / 7)
+    
+    # 4. LAG FEATURES (Historical patterns)
+    for lag in [1, 2, 3, 7, 14, 30]:  # 1-day to 30-day lags
+        df_engineered[f'lag_{lag}'] = df_engineered[target_col].shift(lag)
+    
+    # 5. ROLLING STATISTICS
+    for window in [7, 14, 30, 90]:  # Weekly to quarterly patterns
+        df_engineered[f'rolling_mean_{window}'] = df_engineered[target_col].rolling(window=window, min_periods=1).mean()
+        df_engineered[f'rolling_std_{window}'] = df_engineered[target_col].rolling(window=window, min_periods=1).std()
+        df_engineered[f'rolling_min_{window}'] = df_engineered[target_col].rolling(window=window, min_periods=1).min()
+        df_engineered[f'rolling_max_{window}'] = df_engineered[target_col].rolling(window=window, min_periods=1).max()
+    
+    # 6. DIFFERENCE FEATURES
+    df_engineered['diff_1'] = df_engineered[target_col].diff(1)
+    df_engineered['diff_7'] = df_engineered[target_col].diff(7)
+    
+    # 7. HOLIDAY/SEASON INDICATORS (Simplified)
+    # Summer months (AC usage)
+    df_engineered['is_summer'] = df_engineered['month'].isin([3, 4, 5, 6]).astype(int)
+    # Winter months
+    df_engineered['is_winter'] = df_engineered['month'].isin([11, 12, 1, 2]).astype(int)
+    # Festival season (Oct-Dec in India)
+    df_engineered['is_festive'] = df_engineered['month'].isin([10, 11, 12]).astype(int)
+    
+    # 8. INTERACTION FEATURES
+    if 'Temperature_C' in df_engineered.columns:
+        df_engineered['temp_month_interaction'] = df_engineered['Temperature_C'] * df_engineered['month']
+        df_engineered['temp_season_interaction'] = df_engineered['Temperature_C'] * df_engineered['is_summer']
+    
+    # 9. POLYNOMIAL TREND (quadratic and cubic)
+    df_engineered['time_index_squared'] = df_engineered['time_index'] ** 2
+    df_engineered['time_index_cubic'] = df_engineered['time_index'] ** 3
+    
+    # Drop NaN values created by lags
+    df_engineered = df_engineered.dropna().reset_index(drop=True)
+    
+    return df_engineered
+
+def prepare_forecast_dates(last_date, forecast_months, freq='D'):
+    """Generate future dates for forecasting"""
+    
+    if freq == 'D':
+        future_dates = pd.date_range(
+            start=last_date + timedelta(days=1),
+            periods=forecast_months * 30,  # Approx 30 days per month
+            freq='D'
+        )
+    elif freq == 'M':
+        future_dates = pd.date_range(
+            start=last_date + pd.DateOffset(months=1),
+            periods=forecast_months,
+            freq='M'
+        )
+    
+    return future_dates
+
+def create_future_features(last_row, future_dates, feature_columns):
+    """Create feature matrix for future predictions"""
+    
+    future_df = pd.DataFrame({'Date': future_dates})
+    
+    # Recreate all time-based features for future dates
+    future_df['year'] = future_df['Date'].dt.year
+    future_df['month'] = future_df['Date'].dt.month
+    future_df['day'] = future_df['Date'].dt.day
+    future_df['day_of_week'] = future_df['Date'].dt.dayofweek
+    future_df['day_of_year'] = future_df['Date'].dt.dayofyear
+    future_df['week_of_year'] = future_df['Date'].dt.isocalendar().week
+    future_df['quarter'] = future_df['Date'].dt.quarter
+    future_df['is_weekend'] = (future_df['day_of_week'] >= 5).astype(int)
+    
+    # Cyclical features
+    future_df['month_sin'] = np.sin(2 * np.pi * future_df['month'] / 12)
+    future_df['month_cos'] = np.cos(2 * np.pi * future_df['month'] / 12)
+    future_df['week_sin'] = np.sin(2 * np.pi * future_df['week_of_year'] / 52)
+    future_df['week_cos'] = np.cos(2 * np.pi * future_df['week_of_year'] / 52)
+    future_df['day_sin'] = np.sin(2 * np.pi * future_df['day_of_year'] / 365.25)
+    future_df['day_cos'] = np.cos(2 * np.pi * future_df['day_of_year'] / 365.25)
+    future_df['dow_sin'] = np.sin(2 * np.pi * future_df['day_of_week'] / 7)
+    future_df['dow_cos'] = np.cos(2 * np.pi * future_df['day_of_week'] / 7)
+    
+    # Time index (continue from last)
+    time_start = last_row['time_index'] if 'time_index' in last_row else len(future_dates)
+    future_df['time_index'] = np.arange(time_start + 1, time_start + 1 + len(future_dates))
+    future_df['time_index_squared'] = future_df['time_index'] ** 2
+    future_df['time_index_cubic'] = future_df['time_index'] ** 3
+    
+    # Seasonal indicators
+    future_df['is_summer'] = future_df['month'].isin([3, 4, 5, 6]).astype(int)
+    future_df['is_winter'] = future_df['month'].isin([11, 12, 1, 2]).astype(int)
+    future_df['is_festive'] = future_df['month'].isin([10, 11, 12]).astype(int)
+    
+    # For lag/rolling features - we'll need to recursively predict
+    # This is handled separately in the forecasting loop
+    
+    # Ensure we have all required columns
+    for col in feature_columns:
+        if col not in future_df.columns and col != 'Energy_Consumption_kWh':
+            # Fill with median or appropriate value
+            if col in last_row:
+                future_df[col] = last_row[col]
+            else:
+                future_df[col] = 0
+    
+    return future_df
+
+# ========== ML MODELS ==========
+class EnergyForecaster:
     def __init__(self):
         self.models = {}
         self.results = {}
-        self.feature_importance = {}
-        self.df = None
-        self.features = None
+        self.scaler = StandardScaler()
         
-    def generate_sample_data(self, n_samples=10000):
-        """Generate realistic household energy consumption data"""
-        np.random.seed(42)
-        
-        # Create date range
-        dates = pd.date_range(start='2023-01-01', periods=n_samples, freq='H')
-        
-        # Create features specific to household energy consumption
-        data = {
-            'timestamp': dates,
-            'hour': dates.hour,
-            'day_of_week': dates.dayofweek,
-            'day_of_month': dates.day,
-            'month': dates.month,
-            'is_weekend': (dates.dayofweek >= 5).astype(int),
-            'is_night': ((dates.hour >= 22) | (dates.hour <= 6)).astype(int),
-            'is_peak_hours': ((dates.hour >= 17) & (dates.hour <= 21)).astype(int),
-            
-            # Household features
-            'temperature': 15 + 15 * np.sin(2 * np.pi * dates.hour / 24) + np.random.normal(0, 3, n_samples),
-            'humidity': 50 + 20 * np.sin(2 * np.pi * dates.hour / 12) + np.random.normal(0, 5, n_samples),
-            'occupancy': np.random.poisson(2, n_samples) * ((dates.hour >= 7) & (dates.hour <= 22)),
-            'appliance_usage': np.random.exponential(1, n_samples) * ((dates.hour >= 8) & (dates.hour <= 23)),
-            
-            # Time-based patterns
-            'trend': np.arange(n_samples) * 0.002,
-            'seasonality': 5 * np.sin(2 * np.pi * np.arange(n_samples) / 24) +  # Daily
-                          3 * np.sin(2 * np.pi * np.arange(n_samples) / 168) +  # Weekly
-                          2 * np.sin(2 * np.pi * np.arange(n_samples) / 720),   # Monthly
-            
-            # Random noise
-            'noise': np.random.normal(0, 0.5, n_samples)
-        }
-        
-        # Create DataFrame
-        df = pd.DataFrame(data)
-        
-        # Calculate energy consumption based on features
-        df['energy_consumption'] = (
-            2.0 +  # Base consumption
-            0.8 * df['temperature'] +
-            0.3 * df['humidity'] +
-            1.2 * df['occupancy'] +
-            1.5 * df['appliance_usage'] +
-            0.6 * df['trend'] +
-            0.7 * df['seasonality'] +
-            0.5 * df['is_weekend'] * df['occupancy'] +
-            0.8 * df['is_peak_hours'] * df['appliance_usage'] +
-            df['noise']
-        )
-        
-        # Ensure no negative values
-        df['energy_consumption'] = df['energy_consumption'].clip(lower=0.1)
-        
-        return df
-    
-    def engineer_features_fixed(self, df):
-        """Fixed feature engineering function to avoid the error"""
-        
-        # Make a copy to avoid modifying original
-        df_processed = df.copy()
-        
-        # Create lag features safely
-        for lag in [1, 24, 168]:  # 1 hour, 1 day, 1 week
-            df_processed[f'energy_lag_{lag}'] = df_processed['energy_consumption'].shift(lag)
-        
-        # Create rolling statistics safely
-        windows = [12, 24, 168]  # 12 hours, 1 day, 1 week
-        
-        for window in windows:
-            df_processed[f'energy_rolling_mean_{window}'] = (
-                df_processed['energy_consumption']
-                .rolling(window=window, min_periods=1)
-                .mean()
-            )
-            df_processed[f'energy_rolling_std_{window}'] = (
-                df_processed['energy_consumption']
-                .rolling(window=window, min_periods=1)
-                .std()
-            )
-        
-        # Create rolling statistics for temperature (FIXED - no typo)
-        df_processed['temperature_rolling_mean_12'] = (
-            df_processed['temperature']
-            .rolling(window=12, min_periods=1)
-            .mean()
-        )
-        df_processed['temperature_rolling_std_12'] = (
-            df_processed['temperature']
-            .rolling(window=12, min_periods=1)
-            .std()
-        )
-        
-        # Create interaction features
-        df_processed['temp_hour_interaction'] = df_processed['temperature'] * df_processed['hour']
-        df_processed['occupancy_temp_interaction'] = df_processed['occupancy'] * df_processed['temperature']
-        df_processed['appliance_weekend_interaction'] = (
-            df_processed['appliance_usage'] * df_processed['is_weekend']
-        )
-        
-        # Add Fourier terms for seasonality
-        for period in [24, 168, 720, 8760]:  # Daily, weekly, monthly, yearly
-            df_processed[f'fourier_sin_{period}'] = np.sin(2 * np.pi * df_processed.index / period)
-            df_processed[f'fourier_cos_{period}'] = np.cos(2 * np.pi * df_processed.index / period)
-        
-        # Add time-based features
-        df_processed['hour_sin'] = np.sin(2 * np.pi * df_processed['hour'] / 24)
-        df_processed['hour_cos'] = np.cos(2 * np.pi * df_processed['hour'] / 24)
-        df_processed['day_sin'] = np.sin(2 * np.pi * df_processed['day_of_week'] / 7)
-        df_processed['day_cos'] = np.cos(2 * np.pi * df_processed['day_of_week'] / 7)
-        
-        # Target encoding for categorical features
-        for col in ['hour', 'day_of_week']:
-            mean_encoding = df_processed.groupby(col)['energy_consumption'].transform('mean')
-            df_processed[f'{col}_energy_encoded'] = mean_encoding
-        
-        # Create difference features
-        df_processed['energy_diff_1'] = df_processed['energy_consumption'].diff(1)
-        df_processed['energy_diff_24'] = df_processed['energy_consumption'].diff(24)
-        
-        # Drop NaN values from lag and diff features
-        df_processed = df_processed.dropna().reset_index(drop=True)
-        
-        # Select features for modeling
-        feature_columns = [
-            'hour', 'day_of_week', 'day_of_month', 'month',
-            'is_weekend', 'is_night', 'is_peak_hours',
-            'temperature', 'humidity', 'occupancy', 'appliance_usage',
-            'hour_sin', 'hour_cos', 'day_sin', 'day_cos'
-        ]
-        
-        # Add all engineered features
-        engineered_features = [
-            col for col in df_processed.columns 
-            if col not in ['timestamp', 'energy_consumption', 'trend', 'seasonality', 'noise']
-            and col not in feature_columns
-        ]
-        
-        all_features = feature_columns + engineered_features
-        
-        X = df_processed[all_features].values
-        y = df_processed['energy_consumption'].values
-        
-        return X, y, all_features, df_processed
-    
-    def train_models(self, X, y, features):
-        """Train multiple models with hyperparameter tuning"""
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, shuffle=False, random_state=42
-        )
-        
-        # Scale features
-        scaler = StandardScaler()
-        X_train_scaled = scaler.fit_transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
-        
-        # Define models with simpler hyperparameters for Streamlit
-        models_config = {
-            'Linear Regression': {
-                'model': LinearRegression(),
-                'params': {}
-            },
-            'Ridge Regression': {
-                'model': Ridge(random_state=42),
-                'params': {'alpha': [0.1, 1.0, 10.0]}
-            },
-            'Random Forest': {
-                'model': RandomForestRegressor(random_state=42, n_jobs=-1),
-                'params': {
-                    'n_estimators': [100, 200],
-                    'max_depth': [10, 20]
-                }
-            },
-            'Gradient Boosting': {
-                'model': GradientBoostingRegressor(random_state=42),
-                'params': {
-                    'n_estimators': [100, 200],
-                    'learning_rate': [0.01, 0.1]
-                }
-            },
-            'XGBoost': {
-                'model': xgb.XGBRegressor(random_state=42, verbosity=0, n_jobs=-1),
-                'params': {
-                    'n_estimators': [100, 200],
-                    'learning_rate': [0.01, 0.1],
-                    'max_depth': [3, 5]
-                }
-            }
-        }
+    def train_ml_models(self, X_train, y_train, X_test, y_test, features):
+        """Train multiple ML models with time series features"""
         
         results = {}
         
-        # Progress tracking for Streamlit
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        # Define models
+        models_to_train = {
+            'Linear Regression': LinearRegression(),
+            'Ridge Regression': Ridge(alpha=1.0),
+            'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42),
+            'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
+            'XGBoost': xgb.XGBRegressor(n_estimators=100, random_state=42),
+            'Neural Network': MLPRegressor(hidden_layer_sizes=(50, 50), max_iter=1000, random_state=42)
+        }
         
-        for idx, (name, config) in enumerate(models_config.items()):
-            status_text.text(f"Training {name}...")
-            
+        for name, model in models_to_train.items():
             try:
-                if config['params']:
-                    # Grid search for models with hyperparameters
-                    grid_search = GridSearchCV(
-                        config['model'],
-                        config['params'],
-                        cv=TimeSeriesSplit(n_splits=3),
-                        scoring='r2',
-                        n_jobs=-1,
-                        verbose=0
-                    )
-                    grid_search.fit(X_train_scaled, y_train)
-                    best_model = grid_search.best_estimator_
-                    best_params = grid_search.best_params_
-                else:
-                    # Simple fit for models without hyperparameters
-                    best_model = config['model']
-                    best_model.fit(X_train_scaled, y_train)
-                    best_params = {}
+                # Scale features
+                X_train_scaled = self.scaler.fit_transform(X_train)
+                X_test_scaled = self.scaler.transform(X_test)
                 
-                # Predictions
-                y_pred_train = best_model.predict(X_train_scaled)
-                y_pred_test = best_model.predict(X_test_scaled)
+                # Train
+                model.fit(X_train_scaled, y_train)
+                
+                # Predict
+                y_train_pred = model.predict(X_train_scaled)
+                y_test_pred = model.predict(X_test_scaled)
                 
                 # Calculate metrics
                 metrics = {
-                    'model': best_model,
-                    'train_r2': r2_score(y_train, y_pred_train),
-                    'test_r2': r2_score(y_test, y_pred_test),
-                    'train_mape': mean_absolute_percentage_error(y_train, y_pred_train) * 100,
-                    'test_mape': mean_absolute_percentage_error(y_test, y_pred_test) * 100,
-                    'train_rmse': np.sqrt(mean_squared_error(y_train, y_pred_train)),
-                    'test_rmse': np.sqrt(mean_squared_error(y_test, y_pred_test)),
-                    'best_params': best_params,
+                    'model': model,
+                    'train_mae': mean_absolute_error(y_train, y_train_pred),
+                    'test_mae': mean_absolute_error(y_test, y_test_pred),
+                    'train_rmse': np.sqrt(mean_squared_error(y_train, y_train_pred)),
+                    'test_rmse': np.sqrt(mean_squared_error(y_test, y_test_pred)),
+                    'train_r2': r2_score(y_train, y_train_pred),
+                    'test_r2': r2_score(y_test, y_test_pred),
                     'predictions': {
-                        'train': y_pred_train,
-                        'test': y_pred_test
+                        'train': y_train_pred,
+                        'test': y_test_pred
                     }
                 }
                 
-                # Feature importance if available
-                if hasattr(best_model, 'feature_importances_'):
-                    metrics['feature_importance'] = best_model.feature_importances_
-                elif hasattr(best_model, 'coef_'):
-                    metrics['feature_importance'] = np.abs(best_model.coef_)
-                else:
-                    metrics['feature_importance'] = None
+                # Feature importance
+                if hasattr(model, 'feature_importances_'):
+                    metrics['feature_importance'] = model.feature_importances_
+                elif hasattr(model, 'coef_'):
+                    metrics['feature_importance'] = np.abs(model.coef_)
                 
                 results[name] = metrics
                 
             except Exception as e:
-                st.warning(f"Error training {name}: {str(e)[:100]}...")
+                st.warning(f"Error training {name}: {str(e)[:100]}")
                 continue
+        
+        return results
+    
+    def train_arima(self, data, forecast_steps):
+        """Train ARIMA model (traditional time series)"""
+        try:
+            # Simple ARIMA model
+            model = ARIMA(data, order=(2, 1, 2))  # (p,d,q)
+            model_fit = model.fit()
             
-            # Update progress
-            progress_bar.progress((idx + 1) / len(models_config))
-        
-        status_text.text("Training complete!")
-        
-        self.results = results
-        return results, X_test, y_test
+            # Forecast
+            forecast = model_fit.forecast(steps=forecast_steps)
+            
+            return {
+                'model': model_fit,
+                'forecast': forecast,
+                'aic': model_fit.aic,
+                'bic': model_fit.bic
+            }
+        except Exception as e:
+            st.warning(f"ARIMA Error: {str(e)}")
+            return None
     
-    def display_metrics_dashboard(self):
-        """Display metrics dashboard in Streamlit"""
+    def forecast_future_ml(self, model, last_row, future_dates, feature_columns, target_history):
+        """Forecast future using ML model with recursive prediction for lags"""
         
-        st.markdown("<h2 class='main-header'>📊 Model Performance Dashboard</h2>", unsafe_allow_html=True)
+        # Create base future features
+        future_df = create_future_features(last_row, future_dates, feature_columns)
         
-        if not self.results:
-            st.warning("No models trained yet. Please train models first.")
-            return
+        # Initialize predictions list
+        predictions = []
+        history = list(target_history[-30:])  # Last 30 days as initial history
         
-        # Create columns for metrics
-        col1, col2, col3, col4 = st.columns(4)
+        # For each future date, predict recursively
+        for i in range(len(future_dates)):
+            # Update lag features based on previous predictions
+            if i >= 1:
+                history.append(predictions[-1])
+            
+            # Update rolling statistics
+            if len(history) >= 7:
+                future_df.loc[i, 'lag_1'] = history[-1] if i >= 1 else last_row['Energy_Consumption_kWh']
+                future_df.loc[i, 'lag_7'] = history[-7] if len(history) >= 7 else np.mean(history)
+                future_df.loc[i, 'rolling_mean_7'] = np.mean(history[-7:])
+                future_df.loc[i, 'rolling_mean_30'] = np.mean(history[-30:]) if len(history) >= 30 else np.mean(history)
+            
+            # Prepare features for this date
+            X_future = future_df.iloc[[i]][feature_columns].fillna(0)
+            
+            # Scale and predict
+            X_future_scaled = self.scaler.transform(X_future)
+            pred = model.predict(X_future_scaled)[0]
+            predictions.append(max(0, pred))  # Ensure non-negative
         
-        with col1:
-            best_model = max(self.results.items(), key=lambda x: x[1]['test_r2'])
-            st.metric(
-                label="Best Model",
-                value=best_model[0],
-                delta=f"R²: {best_model[1]['test_r2']:.3f}"
-            )
-        
-        with col2:
-            avg_r2 = np.mean([m['test_r2'] for m in self.results.values()])
-            st.metric(
-                label="Average R²",
-                value=f"{avg_r2:.3f}",
-                delta="All Models"
-            )
-        
-        with col3:
-            best_r2 = max([m['test_r2'] for m in self.results.values()])
-            st.metric(
-                label="Best R² Score",
-                value=f"{best_r2:.3f}",
-                delta="Excellent" if best_r2 > 0.8 else "Good" if best_r2 > 0.6 else "Needs Improvement"
-            )
-        
-        with col4:
-            best_mape = min([m['test_mape'] for m in self.results.values()])
-            st.metric(
-                label="Best MAPE",
-                value=f"{best_mape:.2f}%",
-                delta="Lower is better"
-            )
-        
-        # Create tabs for different views
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📈 Performance Comparison",
-            "🔍 Individual Models",
-            "🎯 Feature Importance",
-            "📋 Detailed Metrics"
-        ])
-        
-        with tab1:
-            self.plot_performance_comparison()
-        
-        with tab2:
-            self.plot_individual_models()
-        
-        with tab3:
-            self.plot_feature_importance()
-        
-        with tab4:
-            self.display_detailed_metrics()
+        return predictions
+
+# ========== MAIN APP ==========
+def main():
+    st.title("🔮 Household Electricity Consumption Forecast")
+    st.markdown("### Predict future energy usage with machine learning")
     
-    def plot_performance_comparison(self):
-        """Plot model performance comparison"""
-        
-        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
-        
-        models = list(self.results.keys())
-        
-        # Plot 1: R² Scores
-        train_r2 = [self.results[m]['train_r2'] for m in models]
-        test_r2 = [self.results[m]['test_r2'] for m in models]
-        
-        x = np.arange(len(models))
-        ax1.bar(x - 0.2, train_r2, 0.4, label='Train', color='lightblue', alpha=0.8)
-        ax1.bar(x + 0.2, test_r2, 0.4, label='Test', color='steelblue', alpha=0.8)
-        ax1.set_xlabel('Models')
-        ax1.set_ylabel('R² Score')
-        ax1.set_title('Train vs Test R² Scores')
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(models, rotation=45, ha='right')
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        # Plot 2: MAPE Comparison
-        test_mape = [self.results[m]['test_mape'] for m in models]
-        colors = ['green' if m < 10 else 'orange' if m < 20 else 'red' for m in test_mape]
-        bars = ax2.bar(models, test_mape, color=colors, alpha=0.8)
-        ax2.set_xlabel('Models')
-        ax2.set_ylabel('MAPE (%)')
-        ax2.set_title('Test MAPE Scores')
-        ax2.set_xticklabels(models, rotation=45, ha='right')
-        ax2.grid(True, alpha=0.3)
-        
-        # Add value labels
-        for bar, val in zip(bars, test_mape):
-            height = bar.get_height()
-            ax2.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                    f'{val:.1f}%', ha='center', va='bottom', fontsize=9)
-        
-        # Plot 3: RMSE Comparison
-        test_rmse = [self.results[m]['test_rmse'] for m in models]
-        ax3.bar(models, test_rmse, color='lightcoral', alpha=0.8)
-        ax3.set_xlabel('Models')
-        ax3.set_ylabel('RMSE')
-        ax3.set_title('Test RMSE Scores')
-        ax3.set_xticklabels(models, rotation=45, ha='right')
-        ax3.grid(True, alpha=0.3)
-        
-        # Plot 4: Composite Score
-        composite_scores = []
-        for model in models:
-            r2 = self.results[model]['test_r2']
-            mape = self.results[model]['test_mape']
-            # Composite score where higher is better
-            composite = r2 * 0.7 + (1 / (1 + mape/100)) * 0.3
-            composite_scores.append(composite)
-        
-        ax4.bar(models, composite_scores, color='lightgreen', alpha=0.8)
-        ax4.set_xlabel('Models')
-        ax4.set_ylabel('Composite Score')
-        ax4.set_title('Model Ranking (Composite Score)')
-        ax4.set_xticklabels(models, rotation=45, ha='right')
-        ax4.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+    # Check if data is loaded
+    if 'forecast_data' not in st.session_state or st.session_state.forecast_data is None:
+        st.error("⚠️ No data loaded! Please go to Data Loader page first.")
+        if st.button("📊 Go to Data Loader", type="primary"):
+            st.switch_page("pages/2_Data_Loader.py")
+        return
     
-    def plot_individual_models(self):
-        """Plot individual model predictions"""
+    # Load data
+    data = st.session_state.forecast_data.copy()
+    st.session_state.raw_data = data.copy()  # Store original
+    
+    # Display data info
+    st.success(f"✅ Data loaded: {len(data)} records from {data['Date'].min().date()} to {data['Date'].max().date()}")
+    
+    # ========== FORECAST SETTINGS ==========
+    st.markdown("---")
+    st.markdown("### 📅 Forecast Settings")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        forecast_months = st.number_input(
+            "Months to Forecast",
+            min_value=1,
+            max_value=36,
+            value=st.session_state.get('prediction_months', 12),
+            help="How many months into the future to predict"
+        )
+    
+    with col2:
+        forecast_freq = st.selectbox(
+            "Forecast Frequency",
+            options=['Daily', 'Monthly'],
+            index=0,
+            help="Daily predictions are more detailed"
+        )
+        freq_code = 'D' if forecast_freq == 'Daily' else 'M'
+    
+    with col3:
+        test_size = st.slider(
+            "Test Data Percentage",
+            min_value=10,
+            max_value=40,
+            value=20,
+            help="Percentage of data to use for testing models"
+        )
+    
+    # ========== DATA PREPARATION ==========
+    st.markdown("---")
+    st.markdown("### ⚙️ Data Preparation")
+    
+    # Engineer features
+    with st.spinner("Engineering time-based features..."):
+        data_engineered = engineer_time_features(data)
         
+        # Display engineered features
+        with st.expander("🔍 View Engineered Features", expanded=False):
+            st.write(f"Original features: {list(data.columns)}")
+            st.write(f"Engineered features: {list(data_engineered.columns)}")
+            st.write(f"Total features: {len(data_engineered.columns)}")
+            st.dataframe(data_engineered.head(), use_container_width=True)
+    
+    # Prepare features and target
+    exclude_cols = ['Date', 'Energy_Consumption_kWh', 'Source', 'Location', 'Household_Size']
+    feature_cols = [col for col in data_engineered.columns 
+                   if col not in exclude_cols and data_engineered[col].dtype in ['int64', 'float64']]
+    
+    X = data_engineered[feature_cols].values
+    y = data_engineered['Energy_Consumption_kWh'].values
+    
+    # Split data (time series aware)
+    split_idx = int(len(X) * (1 - test_size/100))
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_train, y_test = y[:split_idx], y[split_idx:]
+    
+    # ========== MODEL TRAINING ==========
+    st.markdown("---")
+    st.markdown("### 🤖 Model Training & Comparison")
+    
+    if st.button("🚀 Train All Models", type="primary", use_container_width=True):
+        
+        with st.spinner("Training machine learning models..."):
+            # Initialize forecaster
+            forecaster = EnergyForecaster()
+            
+            # Train ML models
+            ml_results = forecaster.train_ml_models(
+                X_train, y_train, X_test, y_test, feature_cols
+            )
+            
+            # Store results
+            st.session_state.ml_results = ml_results
+            st.session_state.forecaster = forecaster
+            st.session_state.feature_cols = feature_cols
+            st.session_state.data_engineered = data_engineered
+            st.session_state.y_test = y_test
+            st.session_state.test_dates = data_engineered['Date'].iloc[split_idx:].values
+            
+            st.success(f"✅ Trained {len(ml_results)} models successfully!")
+    
+    # ========== DISPLAY RESULTS ==========
+    if 'ml_results' in st.session_state and st.session_state.ml_results:
+        results = st.session_state.ml_results
+        
+        # Model Comparison Metrics
+        st.markdown("---")
+        st.markdown("### 📊 Model Performance Comparison")
+        
+        # Create metrics table
+        metrics_data = []
+        for name, res in results.items():
+            metrics_data.append({
+                'Model': name,
+                'Test R²': res['test_r2'],
+                'Test RMSE': res['test_rmse'],
+                'Test MAE': res['test_mae'],
+                'Train R²': res['train_r2'],
+                'Overfit Δ': res['train_r2'] - res['test_r2'],
+                'Status': '✅ Excellent' if res['test_r2'] > 0.8 else 
+                         '🟡 Good' if res['test_r2'] > 0.6 else 
+                         '🟠 Moderate' if res['test_r2'] > 0.4 else 
+                         '🔴 Poor'
+            })
+        
+        df_metrics = pd.DataFrame(metrics_data)
+        st.dataframe(df_metrics.style.format({
+            'Test R²': '{:.3f}',
+            'Test RMSE': '{:.2f}',
+            'Test MAE': '{:.2f}',
+            'Train R²': '{:.3f}',
+            'Overfit Δ': '{:.3f}'
+        }), use_container_width=True)
+        
+        # Best model
+        best_model = max(results.items(), key=lambda x: x[1]['test_r2'])
+        st.info(f"🏆 **Best Model**: {best_model[0]} with R² = {best_model[1]['test_r2']:.3f}")
+        
+        # ========== INDIVIDUAL MODEL VISUALIZATIONS ==========
+        st.markdown("---")
+        st.markdown("### 📈 Individual Model Analysis")
+        
+        # Model selector
         selected_model = st.selectbox(
-            "Select Model to View",
-            list(self.results.keys()),
+            "Select Model to Visualize",
+            list(results.keys()),
             key="model_selector"
         )
         
         if selected_model:
-            metrics = self.results[selected_model]
+            model_res = results[selected_model]
             
-            col1, col2 = st.columns(2)
+            # Create tabs for this model
+            tab1, tab2, tab3, tab4 = st.tabs(["📊 Predictions", "📈 Residuals", "🎯 Feature Importance", "🔮 Future Forecast"])
             
-            with col1:
-                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.metric("Test R²", f"{metrics['test_r2']:.3f}")
-                st.metric("Test MAPE", f"{metrics['test_mape']:.2f}%")
-                st.metric("Test RMSE", f"{metrics['test_rmse']:.2f}")
-                st.markdown("</div>", unsafe_allow_html=True)
-            
-            with col2:
-                # Create prediction plot
-                fig, ax = plt.subplots(figsize=(10, 6))
+            with tab1:
+                # Plot predictions vs actual
+                fig = go.Figure()
                 
-                # Plot last 100 predictions
-                y_pred = metrics['predictions']['test'][-100:]
-                y_true = self.y_test[-100:] if hasattr(self, 'y_test') else None
+                # Test data
+                fig.add_trace(go.Scatter(
+                    x=st.session_state.test_dates,
+                    y=st.session_state.y_test,
+                    mode='lines',
+                    name='Actual (Test)',
+                    line=dict(color='blue', width=2),
+                    opacity=0.7
+                ))
                 
-                if y_true is not None:
-                    ax.plot(y_true, label='Actual', color='blue', linewidth=2, alpha=0.7)
-                    ax.plot(y_pred, label='Predicted', color='red', linewidth=1.5, linestyle='--', alpha=0.9)
-                    ax.fill_between(range(len(y_pred)),
-                                   y_pred - metrics['test_rmse'],
-                                   y_pred + metrics['test_rmse'],
-                                   alpha=0.2, color='gray', label='±RMSE')
-                    
-                    ax.set_xlabel('Time Steps')
-                    ax.set_ylabel('Energy Consumption')
-                    ax.set_title(f'{selected_model} - Predictions vs Actual')
-                    ax.legend()
-                    ax.grid(True, alpha=0.3)
-                    
-                    st.pyplot(fig)
-    
-    def plot_feature_importance(self):
-        """Plot feature importance for tree-based models"""
-        
-        # Get models with feature importance
-        models_with_fi = [
-            m for m in self.results.keys() 
-            if self.results[m]['feature_importance'] is not None
-        ]
-        
-        if not models_with_fi:
-            st.info("Feature importance not available for selected models.")
-            return
-        
-        selected_model = st.selectbox(
-            "Select Model for Feature Importance",
-            models_with_fi,
-            key="fi_selector"
-        )
-        
-        if selected_model and self.features:
-            importance = self.results[selected_model]['feature_importance']
-            
-            # Ensure we have the right number of features
-            n_features = min(len(importance), len(self.features), 20)  # Show top 20
-            
-            # Get indices of top features
-            top_idx = np.argsort(importance)[-n_features:]
-            top_features = [self.features[i] for i in top_idx]
-            top_importance = importance[top_idx]
-            
-            # Create plot
-            fig, ax = plt.subplots(figsize=(12, 8))
-            bars = ax.barh(range(n_features), top_importance)
-            ax.set_yticks(range(n_features))
-            ax.set_yticklabels(top_features)
-            ax.set_xlabel('Importance Score')
-            ax.set_title(f'{selected_model} - Top {n_features} Feature Importance')
-            ax.grid(True, alpha=0.3, axis='x')
-            
-            # Color bars by importance
-            for bar, imp in zip(bars, top_importance):
-                bar.set_color(plt.cm.viridis(imp / max(top_importance)))
-            
-            plt.tight_layout()
-            st.pyplot(fig)
-    
-    def display_detailed_metrics(self):
-        """Display detailed metrics table"""
-        
-        # Create DataFrame with all metrics
-        metrics_data = []
-        for model_name, metrics in self.results.items():
-            metrics_data.append({
-                'Model': model_name,
-                'Train R²': f"{metrics['train_r2']:.4f}",
-                'Test R²': f"{metrics['test_r2']:.4f}",
-                'Train MAPE': f"{metrics['train_mape']:.2f}%",
-                'Test MAPE': f"{metrics['test_mape']:.2f}%",
-                'Train RMSE': f"{metrics['train_rmse']:.2f}",
-                'Test RMSE': f"{metrics['test_rmse']:.2f}",
-                'Overfitting': f"{(metrics['train_r2'] - metrics['test_r2']):.4f}",
-                'Status': '✅ Good' if metrics['test_r2'] > 0.7 else 
-                         '⚠️ Moderate' if metrics['test_r2'] > 0.5 else 
-                         '❌ Needs Improvement'
-            })
-        
-        df_metrics = pd.DataFrame(metrics_data)
-        
-        # Display table
-        st.dataframe(df_metrics, use_container_width=True)
-        
-        # Download button
-        csv = df_metrics.to_csv(index=False)
-        st.download_button(
-            label="📥 Download Metrics as CSV",
-            data=csv,
-            file_name="model_metrics.csv",
-            mime="text/csv"
-        )
-
-def main():
-    """Main Streamlit app"""
-    
-    st.sidebar.markdown("<h2>⚡ Energy Forecast Dashboard</h2>", unsafe_allow_html=True)
-    
-    # Initialize dashboard
-    if 'dashboard' not in st.session_state:
-        st.session_state.dashboard = EnergyForecastDashboard()
-    
-    dashboard = st.session_state.dashboard
-    
-    # Sidebar controls
-    st.sidebar.markdown("### 🎛️ Controls")
-    
-    # Data generation options
-    with st.sidebar.expander("📊 Data Settings", expanded=True):
-        n_samples = st.slider("Number of samples", 1000, 20000, 10000, 1000)
-        generate_data = st.button("🔄 Generate Sample Data")
-    
-    # Model training options
-    with st.sidebar.expander("🤖 Model Settings", expanded=True):
-        selected_models = st.multiselect(
-            "Select models to train",
-            ['Linear Regression', 'Ridge Regression', 'Random Forest', 
-             'Gradient Boosting', 'XGBoost'],
-            default=['Random Forest', 'XGBoost', 'Linear Regression']
-        )
-        train_models = st.button("🚀 Train Selected Models")
-    
-    # Main content
-    st.markdown("<h1 class='main-header'>🏠 Household Energy Consumption Forecasting</h1>", unsafe_allow_html=True)
-    
-    # Generate data section
-    if generate_data:
-        with st.spinner("Generating sample data..."):
-            dashboard.df = dashboard.generate_sample_data(n_samples)
-            st.success(f"✅ Generated {len(dashboard.df)} samples of household energy data!")
-            
-            # Show data preview
-            with st.expander("📋 View Sample Data", expanded=False):
-                st.dataframe(dashboard.df.head(), use_container_width=True)
+                fig.add_trace(go.Scatter(
+                    x=st.session_state.test_dates,
+                    y=model_res['predictions']['test'],
+                    mode='lines',
+                    name=f'Predicted ({selected_model})',
+                    line=dict(color='red', width=2, dash='dash')
+                ))
                 
-                col1, col2, col3 = st.columns(3)
+                fig.update_layout(
+                    title=f'{selected_model} - Predictions vs Actual',
+                    xaxis_title='Date',
+                    yaxis_title='Energy Consumption (kWh)',
+                    hovermode='x unified',
+                    height=500
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Metrics card
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Total Samples", len(dashboard.df))
+                    r2_color = "green" if model_res['test_r2'] > 0.7 else "orange" if model_res['test_r2'] > 0.5 else "red"
+                    st.metric("R² Score", f"{model_res['test_r2']:.3f}", delta_color="off")
+                
                 with col2:
-                    st.metric("Features", len(dashboard.df.columns))
+                    st.metric("RMSE", f"{model_res['test_rmse']:.2f}")
+                
                 with col3:
-                    st.metric("Date Range", 
-                             f"{dashboard.df['timestamp'].min().date()} to {dashboard.df['timestamp'].max().date()}")
-    
-    # Train models section
-    if train_models and dashboard.df is not None:
-        with st.spinner("Training models..."):
-            # Engineer features using the fixed function
-            X, y, features, df_processed = dashboard.engineer_features_fixed(dashboard.df)
-            dashboard.features = features
+                    st.metric("MAE", f"{model_res['test_mae']:.2f}")
+                
+                with col4:
+                    overfit = model_res['train_r2'] - model_res['test_r2']
+                    st.metric("Overfitting", f"{overfit:.3f}", 
+                             delta="Low" if overfit < 0.1 else "High" if overfit > 0.2 else "Moderate")
             
-            # Train models
-            results, X_test, y_test = dashboard.train_models(X, y, features)
-            dashboard.X_test = X_test
-            dashboard.y_test = y_test
+            with tab2:
+                # Residual analysis
+                residuals = st.session_state.y_test - model_res['predictions']['test']
+                
+                col_res1, col_res2 = st.columns(2)
+                
+                with col_res1:
+                    # Residual histogram
+                    fig_hist = px.histogram(
+                        x=residuals,
+                        nbins=30,
+                        title='Residual Distribution',
+                        labels={'x': 'Residuals (Actual - Predicted)'}
+                    )
+                    fig_hist.add_vline(x=0, line_dash="dash", line_color="red")
+                    st.plotly_chart(fig_hist, use_container_width=True)
+                
+                with col_res2:
+                    # Residual vs Predicted
+                    fig_scatter = px.scatter(
+                        x=model_res['predictions']['test'],
+                        y=residuals,
+                        title='Residuals vs Predicted Values',
+                        labels={'x': 'Predicted Values', 'y': 'Residuals'}
+                    )
+                    fig_scatter.add_hline(y=0, line_dash="dash", line_color="red")
+                    st.plotly_chart(fig_scatter, use_container_width=True)
             
-            st.success("✅ Model training completed!")
+            with tab3:
+                # Feature importance
+                if 'feature_importance' in model_res:
+                    importance = model_res['feature_importance']
+                    
+                    if len(importance) == len(st.session_state.feature_cols):
+                        fi_df = pd.DataFrame({
+                            'Feature': st.session_state.feature_cols,
+                            'Importance': importance
+                        }).sort_values('Importance', ascending=False).head(15)
+                        
+                        fig = px.bar(
+                            fi_df,
+                            x='Importance',
+                            y='Feature',
+                            orientation='h',
+                            title='Top 15 Feature Importances',
+                            color='Importance',
+                            color_continuous_scale='viridis'
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        st.write("**Top Features:**")
+                        for idx, row in fi_df.head(10).iterrows():
+                            st.write(f"{row['Feature']}: {row['Importance']:.4f}")
+                    else:
+                        st.info("Feature importance not available for this model")
+                else:
+                    st.info("Feature importance not available for this model")
             
-            # Show best model
-            if results:
-                best_model = max(results.items(), key=lambda x: x[1]['test_r2'])
-                st.info(f"🏆 **Best Model**: {best_model[0]} with R² = {best_model[1]['test_r2']:.3f}")
-    
-    # Display dashboard
-    if dashboard.results:
-        dashboard.display_metrics_dashboard()
+            with tab4:
+                # FUTURE FORECASTING
+                st.markdown("#### 🔮 Generate Future Forecast")
+                
+                if st.button("Generate Forecast", key=f"forecast_{selected_model}"):
+                    with st.spinner(f"Generating {forecast_months}-month forecast..."):
+                        forecaster = st.session_state.forecaster
+                        model = model_res['model']
+                        
+                        # Get last data point
+                        last_row = st.session_state.data_engineered.iloc[-1].to_dict()
+                        
+                        # Generate future dates
+                        last_date = data['Date'].max()
+                        future_dates = prepare_forecast_dates(last_date, forecast_months, freq_code)
+                        
+                        # Get history for recursive prediction
+                        target_history = st.session_state.data_engineered['Energy_Consumption_kWh'].values
+                        
+                        # Generate forecast
+                        future_predictions = forecaster.forecast_future_ml(
+                            model, last_row, future_dates, 
+                            st.session_state.feature_cols, target_history
+                        )
+                        
+                        # Create forecast dataframe
+                        forecast_df = pd.DataFrame({
+                            'Date': future_dates,
+                            'Predicted_Consumption_kWh': future_predictions,
+                            'Model': selected_model
+                        })
+                        
+                        # Store forecast
+                        st.session_state.current_forecast = forecast_df
+                        st.session_state.forecast_model = selected_model
+                        
+                        # Plot forecast
+                        fig = go.Figure()
+                        
+                        # Historical data (last 90 days)
+                        hist_days = min(90, len(data))
+                        hist_data = data.iloc[-hist_days:]
+                        
+                        fig.add_trace(go.Scatter(
+                            x=hist_data['Date'],
+                            y=hist_data['Energy_Consumption_kWh'],
+                            mode='lines',
+                            name='Historical',
+                            line=dict(color='blue', width=2)
+                        ))
+                        
+                        # Forecast
+                        fig.add_trace(go.Scatter(
+                            x=forecast_df['Date'],
+                            y=forecast_df['Predicted_Consumption_kWh'],
+                            mode='lines',
+                            name='Forecast',
+                            line=dict(color='red', width=3)
+                        ))
+                        
+                        # Confidence interval (simplified)
+                        std_dev = np.std(forecast_df['Predicted_Consumption_kWh']) * 1.96
+                        fig.add_trace(go.Scatter(
+                            x=forecast_df['Date'].tolist() + forecast_df['Date'].tolist()[::-1],
+                            y=(forecast_df['Predicted_Consumption_kWh'] + std_dev).tolist() + 
+                              (forecast_df['Predicted_Consumption_kWh'] - std_dev).tolist()[::-1],
+                            fill='toself',
+                            fillcolor='rgba(255,0,0,0.2)',
+                            line=dict(color='rgba(255,255,255,0)'),
+                            name='95% Confidence'
+                        ))
+                        
+                        fig.update_layout(
+                            title=f'{forecast_months}-Month Energy Forecast ({selected_model})',
+                            xaxis_title='Date',
+                            yaxis_title='Energy Consumption (kWh)',
+                            hovermode='x unified',
+                            height=500
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Forecast metrics
+                        st.markdown("#### 📊 Forecast Summary")
+                        
+                        col_f1, col_f2, col_f3 = st.columns(3)
+                        
+                        with col_f1:
+                            avg_forecast = forecast_df['Predicted_Consumption_kWh'].mean()
+                            st.metric("Average Forecast", f"{avg_forecast:.1f} kWh/day")
+                        
+                        with col_f2:
+                            peak_forecast = forecast_df['Predicted_Consumption_kWh'].max()
+                            st.metric("Peak Consumption", f"{peak_forecast:.1f} kWh")
+                        
+                        with col_f3:
+                            total_forecast = forecast_df['Predicted_Consumption_kWh'].sum()
+                            monthly_cost = (total_forecast / forecast_months) * 8  # ₹8 per kWh
+                            st.metric("Est. Monthly Cost", f"₹{monthly_cost:.0f}")
+                        
+                        # Show forecast data
+                        with st.expander("📋 View Forecast Data"):
+                            st.dataframe(forecast_df, use_container_width=True)
+                        
+                        # Download forecast
+                        csv = forecast_df.to_csv(index=False)
+                        st.download_button(
+                            label="📥 Download Forecast",
+                            data=csv,
+                            file_name=f"energy_forecast_{selected_model}_{datetime.now().strftime('%Y%m%d')}.csv",
+                            mime="text/csv"
+                        )
         
-        # Recommendations section
+        # ========== R² IMPROVEMENT TIPS ==========
         st.markdown("---")
-        st.markdown("<h2 class='sub-header'>💡 Recommendations for R² Improvement</h2>", unsafe_allow_html=True)
+        st.markdown("### 💡 How to Improve Low R² Scores")
         
-        col1, col2 = st.columns(2)
+        # Check if any model has poor R²
+        poor_models = [name for name, res in results.items() if res['test_r2'] < 0.5]
         
-        with col1:
-            st.markdown("""
-            ### 🔧 Technical Improvements
-            1. **Feature Engineering**
-               - Add external weather data
-               - Include holiday calendar
-               - Create more lag features
-            2. **Hyperparameter Tuning**
-               - Use Bayesian Optimization
-               - Try different model architectures
-               - Ensemble multiple models
-            3. **Data Quality**
-               - Handle outliers more effectively
-               - Add more historical data
-               - Include smart meter data
-            """)
-        
-        with col2:
-            st.markdown("""
-            ### 📈 Expected R² Gains
-            - **Feature Engineering**: +0.10 to +0.25
-            - **More Data**: +0.05 to +0.15
-            - **Advanced Models**: +0.10 to +0.20
-            - **Ensemble Methods**: +0.05 to +0.10
-            - **Total Potential**: **+0.30 to +0.70**
+        if poor_models:
+            st.warning(f"⚠️ Low R² scores detected in: {', '.join(poor_models)}")
             
-            ### 🎯 Quick Wins
-            1. Add temperature forecast data
-            2. Include occupancy patterns
-            3. Use holiday effects
-            4. Add appliance-specific features
-            """)
-    
-    elif dashboard.df is not None:
-        st.info("👈 Click 'Train Selected Models' in the sidebar to start model training!")
+            col_tip1, col_tip2 = st.columns(2)
+            
+            with col_tip1:
+                st.markdown("""
+                #### 🔧 Technical Solutions:
+                1. **Add External Data**
+                   - Weather data (temperature, humidity)
+                   - Holiday calendar
+                   - Economic indicators
+                
+                2. **Better Feature Engineering**
+                   - Add Fourier terms for seasonality
+                   - Include interaction terms
+                   - Create more lag features (up to 365 days)
+                
+                3. **Advanced Models**
+                   - Try LSTM/GRU for sequential patterns
+                   - Use Prophet (Facebook's time series model)
+                   - Ensemble multiple models
+                """)
+            
+            with col_tip2:
+                st.markdown("""
+                #### 📈 Data Quality:
+                1. **More Historical Data**
+                   - Aim for 2+ years of daily data
+                   - Include multiple seasons
+                
+                2. **Data Cleaning**
+                   - Handle outliers properly
+                   - Fill missing values intelligently
+                   - Remove anomalies
+                
+                3. **Granularity**
+                   - Use hourly data instead of daily
+                   - Include time-of-day patterns
+                
+                #### 🎯 Expected Improvements:
+                - **More data**: +0.10 to +0.30 R²
+                - **Better features**: +0.15 to +0.25 R²  
+                - **Advanced models**: +0.10 to +0.20 R²
+                """)
+        
+        # ========== SEASONALITY ANALYSIS ==========
+        st.markdown("---")
+        st.markdown("### 📅 Seasonality & Trend Analysis")
+        
+        if len(data) > 30:
+            # Decompose time series
+            try:
+                data_ts = data.set_index('Date')['Energy_Consumption_kWh']
+                decomposition = seasonal_decompose(data_ts, model='additive', period=30)
+                
+                fig_decompose = go.Figure()
+                
+                fig_decompose.add_trace(go.Scatter(
+                    x=data_ts.index,
+                    y=decomposition.trend,
+                    mode='lines',
+                    name='Trend',
+                    line=dict(color='red', width=2)
+                ))
+                
+                fig_decompose.add_trace(go.Scatter(
+                    x=data_ts.index,
+                    y=decomposition.seasonal,
+                    mode='lines',
+                    name='Seasonal',
+                    line=dict(color='green', width=1)
+                ))
+                
+                fig_decompose.add_trace(go.Scatter(
+                    x=data_ts.index,
+                    y=decomposition.resid,
+                    mode='lines',
+                    name='Residual',
+                    line=dict(color='blue', width=1, dash='dot')
+                ))
+                
+                fig_decompose.update_layout(
+                    title='Time Series Decomposition (Trend + Seasonal + Residual)',
+                    xaxis_title='Date',
+                    yaxis_title='Energy Consumption (kWh)',
+                    hovermode='x unified',
+                    height=400
+                )
+                
+                st.plotly_chart(fig_decompose, use_container_width=True)
+                
+                # Interpretation
+                trend_strength = np.std(decomposition.trend.dropna()) / np.std(data_ts)
+                seasonal_strength = np.std(decomposition.seasonal.dropna()) / np.std(data_ts)
+                
+                col_int1, col_int2 = st.columns(2)
+                with col_int1:
+                    st.metric("Trend Strength", f"{trend_strength:.2%}")
+                with col_int2:
+                    st.metric("Seasonal Strength", f"{seasonal_strength:.2%}")
+                    
+            except Exception as e:
+                st.info(f"Seasonal decomposition requires at least 2 periods of data. {str(e)}")
     
     else:
-        st.info("👈 Click 'Generate Sample Data' in the sidebar to get started!")
+        st.info("👆 Click 'Train All Models' to start forecasting analysis")
+    
+    # ========== NAVIGATION ==========
+    st.markdown("---")
+    st.markdown("### 🧭 Navigation")
+    
+    col_nav1, col_nav2, col_nav3 = st.columns(3)
+    
+    with col_nav1:
+        if st.button("📊 Back to Data Loader", use_container_width=True):
+            st.switch_page("pages/data_loader.py")
+    
+    with col_nav2:
+        if st.button("📋 Back to Survey", use_container_width=True):
+            st.switch_page("pages/survey.py")
+    
+    with col_nav3:
+        if st.button("🏠 Back to Dashboard", use_container_width=True):
+            st.switch_page("main.py")
 
 if __name__ == "__main__":
     main()
