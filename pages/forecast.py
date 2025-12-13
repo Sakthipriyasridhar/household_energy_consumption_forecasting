@@ -335,7 +335,7 @@ def main():
     if 'forecast_data' not in st.session_state or st.session_state.forecast_data is None:
         st.error("⚠️ No data loaded! Please go to Data Loader page first.")
         if st.button("📊 Go to Data Loader", type="primary"):
-            st.switch_page("pages/2_Data_Loader.py")
+            st.switch_page("pages/data_loader.py")
         return
     
     # Load data
@@ -840,3 +840,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
