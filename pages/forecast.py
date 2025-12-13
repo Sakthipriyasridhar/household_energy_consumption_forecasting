@@ -665,7 +665,39 @@ def render_performance_tab(data, date_column, target_column):
             use_container_width=True,
             height=400
         )
+
+        # ========== ADD BAR CHART HERE ==========
+        st.markdown("---")
+        st.markdown("### 📊 Performance Metrics Bar Chart")
         
+        # Create bar chart comparing R² scores
+        fig_r2 = go.Figure()
+        fig_r2.add_trace(go.Bar(
+            x=df_comparison['Algorithm'],
+            y=df_comparison['R² Score'],
+            name='R² Score',
+            marker_color=df_comparison['R² Score'].apply(
+                lambda x: '#4CAF50' if x > 0.8 
+                else '#FFC107' if x > 0.7 
+                else '#F44336'
+                   
+            ),
+            text=df_comparison['R² Score'].round(3),
+            textposition='auto',
+              
+        ))
+          
+        fig_r2.update_layout(
+            title='R² Score Comparison by Algorithm',
+             xaxis_title='Algorithm',
+             yaxis_title='R² Score',
+             height=500,
+             xaxis_tickangle=-45,
+             showlegend=False
+                 
+        )
+            
+        st.plotly_chart(fig_r2, use_container_width=True)
         # TOP 3 PERFORMERS SECTION
         st.markdown("---")
         st.markdown("## 🏆 Top 3 Performing Algorithms")
@@ -1322,3 +1354,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
