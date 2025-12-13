@@ -259,86 +259,15 @@ ALGORITHMS = {
     }
 }
 
-def generate_future_forecast(model, last_known_features, future_dates, scaler, feature_cols, target_col, date_col):
-    """
-    Generate forecasts for future dates
-    
-    Args:
-        model: Trained ML model
-        last_known_features: Last row of engineered features
-        future_dates: List of future dates to forecast
-        scaler: Fitted StandardScaler
-        feature_cols: List of feature column names
-        target_col: Target column name
-        date_col: Date column name
-    
-    Returns:
-        Dictionary with forecast dates and values
-    """
-    forecasts = []
-    current_features = last_known_features.copy()
-    
-    for i, forecast_date in enumerate(future_dates):
-        # Update time-based features for the new date
-        current_features['time_index'] = current_features['time_index'] + 1
-        
-        if 'month' in current_features:
-            current_features['month'] = forecast_date.month
-            current_features['month_sin'] = np.sin(2 * np.pi * forecast_date.month / 12)
-            current_features['month_cos'] = np.cos(2 * np.pi * forecast_date.month / 12)
-        
-        if 'day_of_year' in current_features:
-            current_features['day_of_year'] = forecast_date.dayofyear
-            current_features['day_sin'] = np.sin(2 * np.pi * forecast_date.dayofyear / 365.25)
-            current_features['day_cos'] = np.cos(2 * np.pi * forecast_date.dayofyear / 365.25)
-        
-        if 'day_of_week' in current_features:
-            current_features['day_of_week'] = forecast_date.dayofweek
-            current_features['dow_sin'] = np.sin(2 * np.pi * forecast_date.dayofweek / 7)
-            current_features['dow_cos'] = np.cos(2 * np.pi * forecast_date.dayofweek / 7)
-            current_features['is_weekend'] = 1 if forecast_date.dayofweek >= 5 else 0
-        
-        # Update lag features (use previous forecast as new lag)
-        if i > 0 and 'lag_1' in current_features:
-            # Shift all lag features
-            for lag in [60, 30, 14, 7, 3, 2, 1]:
-                if f'lag_{lag}' in current_features:
-                    if lag == 1:
-                        current_features['lag_1'] = forecasts[-1]['value']
-                    else:
-                        # Get from previous lags
-                        if f'lag_{lag-1}' in current_features:
-                            current_features[f'lag_{lag}'] = current_features[f'lag_{lag-1}']
-        
-        # Prepare features for prediction
-        feature_values = []
-        for col in feature_cols:
-            if col in current_features:
-                feature_values.append(current_features[col])
-            else:
-                feature_values.append(0)  # Default value
-        
-        # Scale and predict
-        features_scaled = scaler.transform([feature_values])
-        prediction = model.predict(features_scaled)[0]
-        
-        # Store forecast
-        forecasts.append({
-            'date': forecast_date,
-            'value': float(prediction)
-        })
-        
-        # Update current target value for next iteration
-        if target_col in current_features:
-            current_features[target_col] = prediction
-    
-    return forecasts
-
 # ========== UTILITY FUNCTIONS ==========
 def engineer_better_features(df, date_col='Date', target_col=None):
     """Engineer better features to improve R² scores"""
     if target_col is None:
-        target_col = df.columns[1]  # Default to second column
+        # Try to find a target column
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if date_col in numeric_cols:
+            numeric_cols.remove(date_col)
+        target_col = numeric_cols[0] if numeric_cols else df.columns[1]
     
     df_engineered = df.copy()
     
@@ -766,6 +695,9 @@ def main():
         df_comparison = df_comparison.sort_values('R² Score', ascending=False)
         df_comparison['Rank'] = range(1, len(df_comparison) + 1)
         
+        # Store top 3 algorithms
+        top_3_algorithms = df_comparison.head(3)['Algorithm'].tolist()
+        
         # Display comparison table
         st.dataframe(
             df_comparison.style.format({
@@ -799,16 +731,12 @@ def main():
             forecast_dates = []
             
             # Generate future dates
-            if hasattr(st.session_state, 'train_dates'):
-                last_date = st.session_state.train_dates[-1]
-                if hasattr(last_date, 'strftime'):  # If it's a datetime
-                    forecast_dates = [last_date + timedelta(days=i+1) 
-                                    for i in range(st.session_state.forecast_days)]
-                else:
-                    forecast_dates = list(range(len(st.session_state.train_dates), 
-                                              len(st.session_state.train_dates) + st.session_state.forecast_days))
-            else:
-                forecast_dates = list(range(st.session_state.forecast_days))
+            last_date = data[date_column].iloc[-1]
+            if isinstance(last_date, str):
+                last_date = pd.to_datetime(last_date)
+            
+            forecast_dates = [last_date + timedelta(days=i+1) 
+                            for i in range(st.session_state.forecast_days)]
             
             # Generate forecasts
             for _, row in top_3_algos.iterrows():
@@ -830,10 +758,13 @@ def main():
                 # Create forecast comparison chart
                 fig_forecast = go.Figure()
                 
-                # Add historical data
+                # Add historical data (last 100 days)
+                historical_dates = pd.to_datetime(data[date_column].iloc[-100:])
+                historical_values = data[target_column].iloc[-100:]
+                
                 fig_forecast.add_trace(go.Scatter(
-                    x=st.session_state.train_dates[-100:],  # Last 100 days
-                    y=st.session_state.y_train[-100:],
+                    x=historical_dates,
+                    y=historical_values,
                     mode='lines',
                     name='Historical Data',
                     line=dict(color='#1E88E5', width=3),
@@ -985,22 +916,139 @@ def main():
                         hovermode='x unified'
                     )
                     
-          st.markdown('</div>', unsafe_allow_html=True)
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Feature Importance (for tree-based models)
+                if algo_name in ['Random Forest', 'XGBoost', 'LightGBM', 'Gradient Boosting', 'Decision Tree']:
+                    if metrics['model'] is not None and hasattr(metrics['model'], 'feature_importances_'):
+                        try:
+                            importances = metrics['model'].feature_importances_
+                            if len(importances) > 0:
+                                st.markdown("### 🎯 Feature Importance")
+                                
+                                # Get feature names
+                                feature_names = st.session_state.feature_cols[:len(importances)]
+                                
+                                # Create importance dataframe
+                                importance_df = pd.DataFrame({
+                                    'Feature': feature_names,
+                                    'Importance': importances
+                                }).sort_values('Importance', ascending=True).tail(10)
+                                
+                                # Plot feature importance
+                                fig_importance = go.Figure()
+                                fig_importance.add_trace(go.Bar(
+                                    y=importance_df['Feature'],
+                                    x=importance_df['Importance'],
+                                    orientation='h',
+                                    marker_color='#2196F3'
+                                ))
+                                
+                                fig_importance.update_layout(
+                                    title='Top 10 Feature Importances',
+                                    xaxis_title='Importance',
+                                    height=400,
+                                    template='plotly_white'
+                                )
+                                
+                                st.plotly_chart(fig_importance, use_container_width=True)
+                        except:
+                            pass
+                
+                # Model Parameters
+                st.markdown("### ⚙️ Model Information")
+                info_col1, info_col2 = st.columns(2)
+                with info_col1:
+                    st.write(f"**Category:** {algo_info['category']}")
+                    st.write(f"**Description:** {algo_info['description']}")
+                    st.write(f"**Features Used:** {metrics['n_features']}")
+                
+                with info_col2:
+                    st.write(f"**Training Time:** {metrics['train_time']:.2f} seconds")
+                    st.write(f"**Overfitting (ΔR²):** {metrics['train_r2'] - metrics['test_r2']:.3f}")
+                    if metrics['train_r2'] - metrics['test_r2'] > 0.1:
+                        st.warning("⚠️ Potential overfitting detected")
+                    else:
+                        st.success("✅ Good generalization")
+                
+                # Generate custom forecast with this model
+                st.markdown("### 🔮 Generate Forecast with this Model")
+                
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    custom_forecast_days = st.number_input(
+                        "Days to forecast",
+                        min_value=7,
+                        max_value=365,
+                        value=30,
+                        key=f"custom_days_{algo_name}"
+                    )
+                
+                with col_c2:
+                    if st.button(f"Generate {custom_forecast_days}-day Forecast", key=f"btn_{algo_name}"):
+                        if metrics['model'] is not None:
+                            with st.spinner(f"Generating {custom_forecast_days}-day forecast..."):
+                                custom_forecast = generate_forecast(
+                                    metrics['model'],
+                                    metrics['X_train'],
+                                    metrics['y_train'],
+                                    custom_forecast_days
+                                )
+                                
+                                # Create forecast dates
+                                last_date = data[date_column].iloc[-1]
+                                if isinstance(last_date, str):
+                                    last_date = pd.to_datetime(last_date)
+                                custom_dates = [last_date + timedelta(days=i+1) 
+                                              for i in range(custom_forecast_days)]
+                                
+                                # Display forecast
+                                st.markdown(f"**{custom_forecast_days}-day Forecast Results:**")
+                                
+                                col_f1, col_f2, col_f3 = st.columns(3)
+                                with col_f1:
+                                    st.metric("Average", f"{np.mean(custom_forecast):.1f}")
+                                with col_f2:
+                                    st.metric("Minimum", f"{np.min(custom_forecast):.1f}")
+                                with col_f3:
+                                    st.metric("Maximum", f"{np.max(custom_forecast):.1f}")
+                                
+                                # Create mini chart
+                                fig_custom = go.Figure()
+                                fig_custom.add_trace(go.Scatter(
+                                    x=custom_dates,
+                                    y=custom_forecast,
+                                    mode='lines',
+                                    name='Forecast',
+                                    line=dict(color='#FF6B6B', width=2)
+                                ))
+                                
+                                fig_custom.update_layout(
+                                    title=f'{algo_name} - {custom_forecast_days}-day Forecast',
+                                    xaxis_title='Date',
+                                    yaxis_title=target_column,
+                                    height=300,
+                                    template='plotly_white'
+                                )
+                                
+                                st.plotly_chart(fig_custom, use_container_width=True)
+                        else:
+                            st.error("Model not available for forecasting")
         
         # ========== FUTURE FORECASTING SECTION ==========
         st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.markdown("## 🔮 Future Electricity Consumption Forecast")
+        st.markdown("## 🔮 Custom Future Forecasting")
         
         col_f1, col_f2, col_f3 = st.columns(3)
         
         with col_f1:
             forecast_start = st.date_input(
                 "Start Forecast From",
-                value=pd.to_datetime(data['Date'].iloc[-1]) + timedelta(days=1)
+                value=pd.to_datetime(data[date_column].iloc[-1]) + timedelta(days=1)
             )
         
         with col_f2:
-            forecast_days = st.number_input(
+            custom_forecast_days = st.number_input(
                 "Number of Days to Forecast",
                 min_value=7,
                 max_value=365,
@@ -1016,173 +1064,116 @@ def main():
                 help="Choose the best performing model for future predictions"
             )
         
-        if st.button("🔮 Generate Future Forecast", type="primary"):
-            # Generate future dates
-            future_dates = [forecast_start + timedelta(days=i) for i in range(forecast_days)]
-            
+        if st.button("🔮 Generate Custom Forecast", type="primary"):
             # Get the selected model and its metrics
             selected_metrics = results[selected_model]
             model = selected_metrics['model']
             
             if model is not None:
-                # Get the last row of engineered features
-                last_row_idx = -1
-                
-                # Create last known features dictionary
-                last_known_features = {}
-                for col in st.session_state.feature_cols:
-                    if col in data_engineered.columns:
-                        last_known_features[col] = data_engineered[col].iloc[last_row_idx]
-                
-                # Get additional metadata
-                last_known_features['time_index'] = data_engineered['time_index'].iloc[last_row_idx]
-                
-                # Generate forecasts
-                with st.spinner(f"Generating {forecast_days}-day forecast using {selected_model}..."):
-                    forecasts = generate_future_forecast(
-                        model=model,
-                        last_known_features=last_known_features,
-                        future_dates=future_dates,
-                        scaler=forecast_system.scaler,
-                        feature_cols=st.session_state.feature_cols,
-                        target_col='Energy_Consumption_kWh',
-                        date_col='Date'
+                # Generate forecast
+                with st.spinner(f"Generating {custom_forecast_days}-day forecast using {selected_model}..."):
+                    custom_forecast = generate_forecast(
+                        model,
+                        selected_metrics['X_train'],
+                        selected_metrics['y_train'],
+                        custom_forecast_days
                     )
-                
-                # Create forecast dataframe
-                forecast_df = pd.DataFrame(forecasts)
-                
-                # Display forecast results
-                st.markdown("### 📈 Future Consumption Forecast")
-                
-                fig_forecast = go.Figure()
-                
-                # Add historical data (last 60 days)
-                hist_dates = data_engineered['Date'].iloc[-60:]
-                hist_values = data_engineered['Energy_Consumption_kWh'].iloc[-60:]
-                
-                fig_forecast.add_trace(go.Scatter(
-                    x=hist_dates,
-                    y=hist_values,
-                    mode='lines',
-                    name='Historical (Last 60 Days)',
-                    line=dict(color='#1E88E5', width=2),
-                    opacity=0.7
-                ))
-                
-                # Add forecast
-                fig_forecast.add_trace(go.Scatter(
-                    x=forecast_df['date'],
-                    y=forecast_df['value'],
-                    mode='lines+markers',
-                    name=f'Forecast ({selected_model})',
-                    line=dict(color='#FF6B6B', width=3),
-                    marker=dict(size=6)
-                ))
-                
-                # Add confidence interval
-                mean_val = forecast_df['value'].mean()
-                std_val = forecast_df['value'].std()
-                
-                fig_forecast.add_trace(go.Scatter(
-                    x=list(forecast_df['date']) + list(forecast_df['date'])[::-1],
-                    y=list(forecast_df['value'] + std_val) + list(forecast_df['value'] - std_val)[::-1],
-                    fill='toself',
-                    fillcolor='rgba(255, 107, 107, 0.2)',
-                    line=dict(color='rgba(255,255,255,0)'),
-                    name='±1 Std Dev',
-                    showlegend=True
-                ))
-                
-                fig_forecast.update_layout(
-                    title=f'Future Electricity Consumption Forecast - {selected_model}',
-                    xaxis_title='Date',
-                    yaxis_title='Energy Consumption (kWh)',
-                    height=500,
-                    template='plotly_white',
-                    hovermode='x unified',
-                    legend=dict(
-                        yanchor="top",
-                        y=0.99,
-                        xanchor="left",
-                        x=0.01
+                    
+                    # Create forecast dates
+                    forecast_dates = [forecast_start + timedelta(days=i) 
+                                    for i in range(custom_forecast_days)]
+                    
+                    # Create forecast dataframe
+                    forecast_df = pd.DataFrame({
+                        'Date': forecast_dates,
+                        'Forecast': custom_forecast
+                    })
+                    
+                    # Display forecast results
+                    st.markdown("### 📈 Custom Forecast Results")
+                    
+                    fig_custom = go.Figure()
+                    
+                    # Add historical data (last 60 days)
+                    historical_dates = pd.to_datetime(data[date_column].iloc[-60:])
+                    historical_values = data[target_column].iloc[-60:]
+                    
+                    fig_custom.add_trace(go.Scatter(
+                        x=historical_dates,
+                        y=historical_values,
+                        mode='lines',
+                        name='Historical Data',
+                        line=dict(color='#1E88E5', width=2),
+                        opacity=0.7
+                    ))
+                    
+                    # Add forecast
+                    fig_custom.add_trace(go.Scatter(
+                        x=forecast_df['Date'],
+                        y=forecast_df['Forecast'],
+                        mode='lines+markers',
+                        name=f'{selected_model} Forecast',
+                        line=dict(color='#FF6B6B', width=3),
+                        marker=dict(size=6)
+                    ))
+                    
+                    fig_custom.update_layout(
+                        title=f'{custom_forecast_days}-Day Forecast - {selected_model}',
+                        xaxis_title='Date',
+                        yaxis_title=target_column,
+                        height=500,
+                        template='plotly_white',
+                        hovermode='x unified'
                     )
-                )
-                
-                st.plotly_chart(fig_forecast, use_container_width=True)
-                
-                # Display forecast summary
-                st.markdown("### 📊 Forecast Summary")
-                
-                col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-                
-                with col_s1:
-                    st.metric("Average Forecast", f"{forecast_df['value'].mean():.1f} kWh")
-                
-                with col_s2:
-                    st.metric("Maximum Forecast", f"{forecast_df['value'].max():.1f} kWh")
-                
-                with col_s3:
-                    st.metric("Minimum Forecast", f"{forecast_df['value'].min():.1f} kWh")
-                
-                with col_s4:
-                    total_consumption = forecast_df['value'].sum()
-                    st.metric("Total Forecast", f"{total_consumption:.0f} kWh")
-                
-                # Display forecast table
-                st.markdown("### 📋 Detailed Forecast Data")
-                
-                forecast_display = forecast_df.copy()
-                forecast_display['date'] = forecast_display['date'].dt.strftime('%Y-%m-%d')
-                forecast_display['value'] = forecast_display['value'].round(2)
-                forecast_display = forecast_display.rename(columns={
-                    'date': 'Date',
-                    'value': 'Forecasted Consumption (kWh)'
-                })
-                
-                st.dataframe(
-                    forecast_display.style.format({
-                        'Forecasted Consumption (kWh)': '{:.1f}'
-                    }),
-                    use_container_width=True,
-                    height=400
-                )
-                
-                # Download button
-                csv = forecast_display.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Forecast CSV",
-                    data=csv,
-                    file_name=f"electricity_forecast_{forecast_start}_{forecast_days}days.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-                
-                # Forecast insights
-                st.markdown("### 💡 Forecast Insights")
-                
-                # Calculate patterns
-                weekly_pattern = forecast_df['value'].values.reshape(-1, 7).mean(axis=0) if len(forecast_df) >= 7 else None
-                
-                if weekly_pattern is not None:
-                    days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                    max_day = days[np.argmax(weekly_pattern)]
-                    min_day = days[np.argmin(weekly_pattern)]
                     
-                    col_i1, col_i2 = st.columns(2)
+                    st.plotly_chart(fig_custom, use_container_width=True)
                     
-                    with col_i1:
-                        st.info(f"**Peak Consumption:** {max_day}s ({weekly_pattern.max():.1f} kWh)")
-                        st.info(f"**Lowest Consumption:** {min_day}s ({weekly_pattern.min():.1f} kWh)")
+                    # Display forecast summary
+                    st.markdown("### 📊 Forecast Summary")
                     
-                    with col_i2:
-                        trend = np.polyfit(range(len(forecast_df)), forecast_df['value'], 1)[0]
-                        if trend > 0:
-                            st.warning(f"**Trend:** Increasing ({trend:.3f} kWh/day)")
-                        elif trend < 0:
-                            st.success(f"**Trend:** Decreasing ({abs(trend):.3f} kWh/day)")
-                        else:
-                            st.info("**Trend:** Stable")
+                    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+                    
+                    with col_s1:
+                        st.metric("Average Forecast", f"{forecast_df['Forecast'].mean():.1f}")
+                    
+                    with col_s2:
+                        st.metric("Maximum Forecast", f"{forecast_df['Forecast'].max():.1f}")
+                    
+                    with col_s3:
+                        st.metric("Minimum Forecast", f"{forecast_df['Forecast'].min():.1f}")
+                    
+                    with col_s4:
+                        total_forecast = forecast_df['Forecast'].sum()
+                        st.metric("Total Forecast", f"{total_forecast:.0f}")
+                    
+                    # Display forecast table
+                    st.markdown("### 📋 Detailed Forecast Data")
+                    
+                    forecast_display = forecast_df.copy()
+                    forecast_display['Date'] = forecast_display['Date'].dt.strftime('%Y-%m-%d')
+                    forecast_display['Forecast'] = forecast_display['Forecast'].round(2)
+                    forecast_display = forecast_display.rename(columns={
+                        'Date': 'Date',
+                        'Forecast': f'Forecasted {target_column}'
+                    })
+                    
+                    st.dataframe(
+                        forecast_display.style.format({
+                            f'Forecasted {target_column}': '{:.1f}'
+                        }),
+                        use_container_width=True,
+                        height=400
+                    )
+                    
+                    # Download button
+                    csv = forecast_display.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Forecast CSV",
+                        data=csv,
+                        file_name=f"{target_column}_forecast_{forecast_start}_{custom_forecast_days}days.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
             else:
                 st.error(f"Model {selected_model} is not available for forecasting")
         
