@@ -279,39 +279,21 @@ ALGORITHMS = {
 def load_data_from_data_loader():
     """Load data from the data loader page"""
     try:
-        # Check if data is available in session state from data loader
-        if 'uploaded_data' in st.session_state and st.session_state.uploaded_data is not None:
-            data = st.session_state.uploaded_data.copy()
-            st.success(f"✅ Data loaded from Data Loader page! ({len(data)} rows, {len(data.columns)} columns)")
-            return data
-        else:
-            # Generate sample data if no data loaded
-            st.info("No data found from Data Loader. Using sample data for demonstration.")
-            dates = pd.date_range(start='2022-01-01', periods=730, freq='D')
-            
-            np.random.seed(42)
-            base = 25
-            yearly_seasonal = 12 * np.sin(2 * np.pi * np.arange(730) / 365)
-            weekly_seasonal = 5 * np.sin(2 * np.pi * np.arange(730) / 7)
-            trend = np.linspace(0, 15, 730)
-            noise = np.random.normal(0, 3, 730)
-            
-            energy = base + yearly_seasonal + weekly_seasonal + trend + noise
-            energy = np.maximum(energy, 10)
-            
-            data = pd.DataFrame({
-                'Date': dates,
-                'Energy_Consumption_kWh': energy,
-                'Electricity_Usage': energy * 1.1 + np.random.normal(0, 2, 730),
-                'Power_Demand': energy * 0.9 + np.random.normal(0, 1.5, 730),
-                'Temperature_C': 20 + 10 * np.sin(2 * np.pi * np.arange(730) / 365) + np.random.normal(0, 5, 730),
-                'Revenue_USD': energy * 0.15 + np.random.normal(50, 10, 730),
-                'Production_Units': np.random.randint(100, 500, 730)
-            })
-            return data
-    except Exception as e:
-        st.error(f"Error loading data from Data Loader: {str(e)}")
-        return None
+        # FIXED: Check the correct session state keys
+        data_sources = ['forecast_data', 'uploaded_data', 'data']
+        
+        for source in data_sources:
+            if (source in st.session_state and 
+                st.session_state[source] is not None and 
+                len(st.session_state[source]) > 0):
+                
+                data = st.session_state[source].copy()
+                st.success(f"✅ Data loaded ({source}: {len(data)} rows)")
+                return data
+        
+        # If no data found, generate sample
+        st.info("No data found from Data Loader. Using sample data for demonstration.")
+        # ... your sample data generation code ...
 
 def engineer_better_features(df, date_col='Date', target_col=None):
     """Engineer better features to improve R² scores"""
@@ -1119,3 +1101,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
