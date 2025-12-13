@@ -1,4 +1,3 @@
-# pages/forecast.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -276,6 +275,7 @@ ALGORITHMS = {
 }
 
 # ========== UTILITY FUNCTIONS ==========
+# ========== UTILITY FUNCTIONS ==========
 def load_data_from_data_loader():
     """Load data from the data loader page"""
     try:
@@ -291,10 +291,45 @@ def load_data_from_data_loader():
                 st.success(f"✅ Data loaded ({source}: {len(data)} rows)")
                 return data
         
-        # If no data found, generate sample
+        # If no data found, generate sample data
         st.info("No data found from Data Loader. Using sample data for demonstration.")
-        # ... your sample data generation code ...
-
+        
+        # Generate sample data
+        dates = pd.date_range(start='2022-01-01', periods=730, freq='D')
+        
+        np.random.seed(42)
+        base = 25
+        yearly_seasonal = 12 * np.sin(2 * np.pi * np.arange(730) / 365)
+        weekly_seasonal = 5 * np.sin(2 * np.pi * np.arange(730) / 7)
+        trend = np.linspace(0, 15, 730)
+        noise = np.random.normal(0, 3, 730)
+        
+        energy = base + yearly_seasonal + weekly_seasonal + trend + noise
+        energy = np.maximum(energy, 10)
+        
+        data = pd.DataFrame({
+            'Date': dates,
+            'Energy_Consumption_kWh': energy,
+            'Electricity_Usage': energy * 1.1 + np.random.normal(0, 2, 730),
+            'Power_Demand': energy * 0.9 + np.random.normal(0, 1.5, 730),
+            'Temperature_C': 20 + 10 * np.sin(2 * np.pi * np.arange(730) / 365) + np.random.normal(0, 5, 730),
+            'Revenue_USD': energy * 0.15 + np.random.normal(50, 10, 730),
+            'Production_Units': np.random.randint(100, 500, 730)
+        })
+        
+        return data
+        
+    except Exception as e:
+        st.error(f"Error loading data from Data Loader: {str(e)}")
+        # Return minimal sample data as fallback
+        dates = pd.date_range(start='2022-01-01', periods=100, freq='D')
+        energy = np.random.normal(30, 5, 100)
+        data = pd.DataFrame({
+            'Date': dates,
+            'Energy_Consumption_kWh': energy
+        })
+        return data
+        
 def engineer_better_features(df, date_col='Date', target_col=None):
     """Engineer better features to improve R² scores"""
     if target_col is None:
@@ -739,26 +774,17 @@ def main():
         st.markdown("## 🔮 Future Forecasting with Top 3 Models")
         st.markdown("*Generate forecasts using the top 3 performing algorithms*")
         
-        # User-defined forecast period
-        col_f1, col_f2 = st.columns(2)
-        
-        with col_f1:
-            forecast_start = st.date_input(
-                "Start Forecast From",
-                value=datetime.now().date(),
-                help="Select the start date for forecasting"
-            )
-        
-        with col_f2:
-            forecast_days = st.number_input(
-                "Number of Days to Forecast",
-                min_value=7,
-                max_value=365,
-                value=30,
-                step=1,
-                help="How many days into the future to predict"
-            )
-        
+with st.expander(f"#{row['Rank']} {algo_name} - R²: {row['R² Score']:.3f} ({algo_info['category']})", expanded=False):
+    # Header with metrics
+    col1, col2, col3, col4 = st.columns(4)  # This defines col3 and col4
+    with col1:
+        st.metric("R² Score", f"{row['R² Score']:.3f}")
+    with col2:
+        st.metric("RMSE", f"{row['RMSE']:.2f}")
+    with col3:  # Changed from col_f3 to col3
+        st.metric("MAE", f"{row['MAE']:.2f}")
+    with col4:  # Changed from col_f4 to col4
+        st.metric("Train Time", f"{row['Train Time (s)']:.2f}s")
         if st.button("📅 Generate Future Forecasts", type="primary", use_container_width=True):
             with st.spinner(f"Generating {forecast_days}-day forecasts using top 3 models..."):
                 # Get top 3 algorithms
@@ -1101,4 +1127,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
