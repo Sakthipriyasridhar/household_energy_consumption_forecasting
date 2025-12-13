@@ -191,6 +191,14 @@ st.markdown("""
         margin: 10px 0;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
+    
+    /* Forecast data table */
+    .forecast-table {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -598,8 +606,10 @@ def render_sidebar():
                 for algo in matching_algos:
                     st.write(f"- {algo}")
         
-        # Train Models Button
+        # Forecast Settings
         st.markdown("---")
+        st.markdown("### 📅 Forecast Settings")
+        
         test_size = st.slider(
             "Test Data Size (%)",
             min_value=10,
@@ -608,12 +618,27 @@ def render_sidebar():
             help="Percentage of data for testing models"
         )
         
+        forecast_days = st.slider(
+            "Days to Forecast",
+            min_value=7,
+            max_value=90,
+            value=30,
+            help="Number of days to forecast into the future"
+        )
+        
+        # Store forecast days in session state
+        if 'forecast_days' not in st.session_state:
+            st.session_state.forecast_days = forecast_days
+        
+        # Train Models Button
+        st.markdown("---")
         if st.button("🚀 Train All Models", type="primary", use_container_width=True, key="train_button"):
             if len(selected_algorithms) == 0:
                 st.warning("Please select at least one algorithm")
             else:
                 st.session_state.selected_algorithms = selected_algorithms
                 st.session_state.test_size = test_size
+                st.session_state.forecast_days = forecast_days
                 st.session_state.train_models = True
                 st.rerun()
         
@@ -680,24 +705,22 @@ def render_performance_tab(data, date_column, target_column):
                 lambda x: '#4CAF50' if x > 0.8 
                 else '#FFC107' if x > 0.7 
                 else '#F44336'
-                   
             ),
             text=df_comparison['R² Score'].round(3),
             textposition='auto',
-              
         ))
-          
+        
         fig_r2.update_layout(
             title='R² Score Comparison by Algorithm',
-             xaxis_title='Algorithm',
-             yaxis_title='R² Score',
-             height=500,
-             xaxis_tickangle=-45,
-             showlegend=False
-                 
+            xaxis_title='Algorithm',
+            yaxis_title='R² Score',
+            height=500,
+            xaxis_tickangle=-45,
+            showlegend=False
         )
-            
+        
         st.plotly_chart(fig_r2, use_container_width=True)
+        
         # TOP 3 PERFORMERS SECTION
         st.markdown("---")
         st.markdown("## 🏆 Top 3 Performing Algorithms")
@@ -744,13 +767,24 @@ def render_performance_tab(data, date_column, target_column):
             st.markdown("*Click the button below to generate forecast with the top model*")
         
         with col2:
-            forecast_days = st.number_input("Days to forecast", min_value=7, max_value=90, value=30, key="quick_forecast_days")
+            forecast_days = st.number_input(
+                "Days to forecast", 
+                min_value=7, 
+                max_value=90, 
+                value=st.session_state.get('forecast_days', 30),
+                key="quick_forecast_days_display"
+            )
         
         with col3:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button(f"📅 Forecast with #{top_3.iloc[0]['Rank']} {top_model_name}", type="primary", use_container_width=True):
-                st.session_state.quick_forecast_model = top_model_name
-                st.session_state.quick_forecast_days = forecast_days
+            if st.button(f"📅 Forecast with #{top_3.iloc[0]['Rank']} {top_model_name}", 
+                        type="primary", 
+                        use_container_width=True,
+                        key="forecast_top_model_button"):
+                # Update session state safely
+                st.session_state['quick_forecast_model'] = top_model_name
+                st.session_state['forecast_days'] = forecast_days
+                st.success(f"Forecast settings updated! Using {top_model_name} for {forecast_days} days.")
         
         # INDIVIDUAL ALGORITHM DETAILS SECTION
         st.markdown("---")
@@ -945,7 +979,9 @@ def render_forecasting_tab(data, date_column, target_column):
         
         sorted_algorithms.sort(key=lambda x: x[1], reverse=True)
         
-        # Forecast settings
+        # Forecast settings - Get from session state or use default
+        forecast_days = st.session_state.get('forecast_days', 30)
+        
         col1, col2 = st.columns(2)
         with col1:
             forecast_start = st.date_input(
@@ -955,19 +991,17 @@ def render_forecasting_tab(data, date_column, target_column):
             )
         
         with col2:
-            forecast_days = st.number_input(
-                "Days to Forecast",
-                min_value=7,
-                max_value=365,
-                value=30,
-                step=7,
-                help="How many days into the future to predict"
-            )
+            # Display forecast days (read-only from sidebar)
+            st.info(f"**Forecast Period:** {forecast_days} days")
+            st.caption("Change forecast days in the sidebar settings")
         
         # Generate forecast dates
         last_date = pd.to_datetime(data[date_column].iloc[-1])
         forecast_dates = [last_date + timedelta(days=i+1) 
                          for i in range(forecast_days)]
+        
+        # Store forecasts for ensemble calculation
+        all_forecasts = {}
         
         # Create expanders for each algorithm (ALL COLLAPSED BY DEFAULT)
         for idx, (algo_name, r2_score) in enumerate(sorted_algorithms):
@@ -994,6 +1028,9 @@ def render_forecasting_tab(data, date_column, target_column):
                         st.session_state.y_train,
                         forecast_days
                     )
+                
+                # Store forecast for ensemble
+                all_forecasts[algo_name] = future_forecast
                 
                 # Create forecast visualization
                 fig = go.Figure()
@@ -1066,23 +1103,32 @@ def render_forecasting_tab(data, date_column, target_column):
                 with col_stats4:
                     st.metric("Total Forecast", f"{np.sum(future_forecast):.0f}")
                 
-                # Recent forecast values table
-                st.markdown("#### 📋 Recent Forecast Values")
+                # ========== ADD FORECAST DATA PREVIEW HERE ==========
+                st.markdown("#### 📋 Forecast Data Preview")
                 
+                # Create forecast dataframe
                 forecast_df = pd.DataFrame({
-                    'Date': forecast_dates[:10],
-                    'Forecast': future_forecast[:10].round(2)
+                    'Date': forecast_dates,
+                    f'{algo_name}_Forecast': future_forecast.round(2)
                 })
                 
-                st.dataframe(forecast_df, use_container_width=True, hide_index=True)
+                # Display first 10 rows
+                st.dataframe(
+                    forecast_df.head(10), 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        'Date': st.column_config.DateColumn('Date', format='YYYY-MM-DD'),
+                        f'{algo_name}_Forecast': st.column_config.NumberColumn(
+                            'Forecast', 
+                            format='%.2f',
+                            help=f'Forecasted {target_column} values'
+                        )
+                    }
+                )
                 
                 # Download button for this algorithm's forecast
-                full_forecast_df = pd.DataFrame({
-                    'Date': forecast_dates,
-                    'Forecast': future_forecast.round(2)
-                })
-                
-                csv = full_forecast_df.to_csv(index=False)
+                csv = forecast_df.to_csv(index=False)
                 st.download_button(
                     label=f"📥 Download {algo_name} Forecast",
                     data=csv,
@@ -1094,94 +1140,96 @@ def render_forecasting_tab(data, date_column, target_column):
                 st.markdown("---")
         
         # Ensemble forecast section (if multiple algorithms)
-        if len(sorted_algorithms) > 1:
+        if len(all_forecasts) > 1:
             st.markdown("## 🤝 Ensemble Forecast (Average of All Models)")
             
-            # Generate forecasts for all algorithms
-            all_forecasts = []
-            algo_names = []
+            # Calculate ensemble (average)
+            all_forecasts_array = np.array(list(all_forecasts.values()))
+            ensemble_forecast = np.mean(all_forecasts_array, axis=0)
             
-            for algo_name, _ in sorted_algorithms:
-                metrics = results[algo_name]
-                if 'model' in metrics and metrics['model'] is not None:
-                    future_forecast = generate_forecast(
-                        metrics['model'],
-                        st.session_state.X_train,
-                        st.session_state.y_train,
-                        forecast_days
-                    )
-                    all_forecasts.append(future_forecast)
-                    algo_names.append(algo_name)
+            # Display ensemble forecast
+            fig_ensemble = go.Figure()
             
-            if all_forecasts:
-                # Calculate ensemble (average)
-                all_forecasts_array = np.array(all_forecasts)
-                ensemble_forecast = np.mean(all_forecasts_array, axis=0)
+            # Add historical data
+            if len(data) > 60:
+                hist_dates = pd.to_datetime(data[date_column].iloc[-60:])
+                hist_values = data[target_column].iloc[-60:]
                 
-                # Display ensemble forecast
-                fig_ensemble = go.Figure()
-                
-                # Add historical data
-                if len(data) > 60:
-                    hist_dates = pd.to_datetime(data[date_column].iloc[-60:])
-                    hist_values = data[target_column].iloc[-60:]
-                    
-                    fig_ensemble.add_trace(go.Scatter(
-                        x=hist_dates,
-                        y=hist_values,
-                        mode='lines',
-                        name='Historical Data',
-                        line=dict(color='#1E88E5', width=3),
-                        opacity=0.7
-                    ))
-                
-                # Add ensemble forecast
                 fig_ensemble.add_trace(go.Scatter(
-                    x=forecast_dates,
-                    y=ensemble_forecast,
-                    mode='lines+markers',
-                    name='Ensemble Forecast (Average)',
-                    line=dict(color='#9C27B0', width=4, dash='dash'),
-                    marker=dict(size=10, color='#9C27B0'),
-                    opacity=0.9
+                    x=hist_dates,
+                    y=hist_values,
+                    mode='lines',
+                    name='Historical Data',
+                    line=dict(color='#1E88E5', width=3),
+                    opacity=0.7
                 ))
-                
-                fig_ensemble.update_layout(
-                    title=f'Ensemble Forecast - {forecast_days}-Day Average of {len(all_forecasts)} Models',
-                    xaxis_title='Date',
-                    yaxis_title=target_column,
-                    height=450,
-                    template='plotly_white',
-                    hovermode='x unified'
-                )
-                
-                st.plotly_chart(fig_ensemble, use_container_width=True)
-                
-                # Ensemble statistics
-                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
-                with col_e1:
-                    st.metric("Ensemble Avg", f"{np.mean(ensemble_forecast):.2f}")
-                with col_e2:
-                    st.metric("Ensemble Min", f"{np.min(ensemble_forecast):.2f}")
-                with col_e3:
-                    st.metric("Ensemble Max", f"{np.max(ensemble_forecast):.2f}")
-                with col_e4:
-                    st.metric("Ensemble Total", f"{np.sum(ensemble_forecast):.0f}")
-                
-                # Download ensemble forecast
-                ensemble_df = pd.DataFrame({
-                    'Date': forecast_dates,
-                    'Ensemble_Forecast': ensemble_forecast.round(2)
-                })
-                
-                csv_ensemble = ensemble_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Ensemble Forecast",
-                    data=csv_ensemble,
-                    file_name=f"ensemble_forecast_{forecast_start}_{forecast_days}days.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+            
+            # Add ensemble forecast
+            fig_ensemble.add_trace(go.Scatter(
+                x=forecast_dates,
+                y=ensemble_forecast,
+                mode='lines+markers',
+                name='Ensemble Forecast (Average)',
+                line=dict(color='#9C27B0', width=4, dash='dash'),
+                marker=dict(size=10, color='#9C27B0'),
+                opacity=0.9
+            ))
+            
+            fig_ensemble.update_layout(
+                title=f'Ensemble Forecast - {forecast_days}-Day Average of {len(all_forecasts)} Models',
+                xaxis_title='Date',
+                yaxis_title=target_column,
+                height=450,
+                template='plotly_white',
+                hovermode='x unified'
+            )
+            
+            st.plotly_chart(fig_ensemble, use_container_width=True)
+            
+            # Ensemble statistics
+            col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+            with col_e1:
+                st.metric("Ensemble Avg", f"{np.mean(ensemble_forecast):.2f}")
+            with col_e2:
+                st.metric("Ensemble Min", f"{np.min(ensemble_forecast):.2f}")
+            with col_e3:
+                st.metric("Ensemble Max", f"{np.max(ensemble_forecast):.2f}")
+            with col_e4:
+                st.metric("Ensemble Total", f"{np.sum(ensemble_forecast):.0f}")
+            
+            # ========== ENSEMBLE FORECAST DATA PREVIEW ==========
+            st.markdown("#### 📋 Ensemble Forecast Data Preview")
+            
+            # Create ensemble forecast dataframe
+            ensemble_df = pd.DataFrame({
+                'Date': forecast_dates,
+                'Ensemble_Forecast': ensemble_forecast.round(2)
+            })
+            
+            # Display first 10 rows
+            st.dataframe(
+                ensemble_df.head(10), 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    'Date': st.column_config.DateColumn('Date', format='YYYY-MM-DD'),
+                    'Ensemble_Forecast': st.column_config.NumberColumn(
+                        'Ensemble Forecast', 
+                        format='%.2f',
+                        help=f'Ensemble forecasted {target_column} values'
+                    )
+                }
+            )
+            
+            # Download ensemble forecast
+            csv_ensemble = ensemble_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Ensemble Forecast",
+                data=csv_ensemble,
+                file_name=f"ensemble_forecast_{forecast_start}_{forecast_days}days.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
     
     else:
         st.info("👈 Please train models first in the Model Performance tab to see individual forecasts.")
@@ -1189,7 +1237,7 @@ def render_forecasting_tab(data, date_column, target_column):
         **What you'll see in this tab:**
         - Expandable sections for each algorithm (collapsed by default)
         - Individual forecast visualizations for each model
-        - Forecast statistics and downloadable data
+        - Forecast statistics and data preview
         - Ensemble forecast (average of all models)
         """)
     
@@ -1206,7 +1254,7 @@ def main():
     with col2:
         st.markdown("")
         if st.button("🔄 Reset All", use_container_width=True, type="secondary"):
-            for key in ['data', 'results', 'train_models', 'selected_algorithms']:
+            for key in ['data', 'results', 'train_models', 'selected_algorithms', 'forecast_days']:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
@@ -1354,4 +1402,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
