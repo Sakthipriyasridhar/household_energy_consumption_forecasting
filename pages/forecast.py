@@ -986,8 +986,6 @@ def main():
                     )
                     
                     st.plotly_chart(fig, use_container_width=True)
-    
-          st.markdown('</div>', unsafe_allow_html=True)
         
         # ========== FUTURE FORECASTING SECTION ==========
         st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
@@ -1189,7 +1187,6 @@ def main():
                 st.error(f"Model {selected_model} is not available for forecasting")
         
         st.markdown('</div>', unsafe_allow_html=True)
-        
     
     else:
         # Initial state - show instructions
@@ -1254,4 +1251,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
