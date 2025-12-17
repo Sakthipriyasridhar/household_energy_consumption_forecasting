@@ -376,26 +376,30 @@ if st.session_state.get("solar_results"):
         x=months,
         y=temps,
         name='Avg Temperature (°C)',
-        yaxis='y2',
         line=dict(color='#EF476F', width=3),
         mode='lines+markers'
     ))
     
+    # FIXED: Using the newer, cleaner syntax for layout updates
     fig4.update_layout(
         title=f'Monthly Solar Generation Pattern for {location}',
         xaxis_title='Month',
         yaxis_title='Generation (kWh)',
-        yaxis2=dict(
-            title='Temperature (°C)',
-            overlaying='y',
-            side='right',
-            titlefont=dict(color='#EF476F'),
-            tickfont=dict(color='#EF476F')
-        ),
         height=400,
         showlegend=True,
         hovermode='x unified'
     )
+    
+    # Add secondary y-axis for temperature
+    fig4.update_yaxes(
+        title_text="Temperature (°C)",
+        secondary_y=True,
+        titlefont=dict(color="#EF476F"),
+        tickfont=dict(color="#EF476F")
+    )
+    
+    # Update the temperature trace to use secondary y-axis
+    fig4.data[1].update(yaxis="y2")
     
     st.plotly_chart(fig4, use_container_width=True)
     
