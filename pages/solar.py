@@ -329,66 +329,70 @@ if st.session_state.get("solar_results"):
     st.plotly_chart(fig3, use_container_width=True)
     
     st.divider()
+
+    # ========== GRAPH 4: Monthly Generation by Season ==========
+    st.markdown("#### 🌦️ Monthly Solar Generation Pattern")
+
+    # ... [keep all your data preparation code as is] ...
+
+    from plotly.subplots import make_subplots
+
+    fig4 = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Add generation bars
+    fig4.add_trace(
+        go.Bar(
+             x=months,
+             y=monthly_gen_pattern,
+             name='Solar Generation',
+             marker_color='#FFD166',
+             text=[f'{val:.0f}' for val in monthly_gen_pattern],
+             textposition='auto'
+        ),
+        secondary_y=False
+    )
+
+    # Add temperature line
+    fig4.add_trace(
+        go.Scatter(
+            x=months,
+            y=temps,
+            name='Avg Temperature (°C)',
+            line=dict(color='#EF476F', width=3),
+            mode='lines+markers'        
+        ),
+        secondary_y=True
+    )
+
+    # Update layout
+    fig4.update_layout(
+        title=f'Monthly Solar Generation Pattern for {location}',
+        xaxis_title='Month',
+        height=400,
+        showlegend=True,
+        hovermode='x unified'
     
-# ========== GRAPH 4: Monthly Generation by Season ==========
-st.markdown("#### 🌦️ Monthly Solar Generation Pattern")
+    )
 
-# ... [keep all your data preparation code as is] ...
+    # Update axes
+    fig4.update_yaxes(
+        title_text='Generation (kWh)',
+        title_font_color='#FFD166',
+        tickfont_color='#FFD166',
+        secondary_y=False
+    )
+    
 
-from plotly.subplots import make_subplots
+    fig4.update_yaxes(
+        title_text='Temperature (°C)',
+        title_font_color='#EF476F',
+        tickfont_color='#EF476F',
+        secondary_y=True
+    
+    )
 
-fig4 = make_subplots(specs=[[{"secondary_y": True}]])
+    st.plotly_chart(fig4, use_container_width=True)
 
-# Add generation bars
-fig4.add_trace(
-    go.Bar(
-        x=months,
-        y=monthly_gen_pattern,
-        name='Solar Generation',
-        marker_color='#FFD166',
-        text=[f'{val:.0f}' for val in monthly_gen_pattern],
-        textposition='auto'
-    ),
-    secondary_y=False
-)
-
-# Add temperature line
-fig4.add_trace(
-    go.Scatter(
-        x=months,
-        y=temps,
-        name='Avg Temperature (°C)',
-        line=dict(color='#EF476F', width=3),
-        mode='lines+markers'
-    ),
-    secondary_y=True
-)
-
-# Update layout
-fig4.update_layout(
-    title=f'Monthly Solar Generation Pattern for {location}',
-    xaxis_title='Month',
-    height=400,
-    showlegend=True,
-    hovermode='x unified'
-)
-
-# Update axes
-fig4.update_yaxes(
-    title_text='Generation (kWh)',
-    title_font_color='#FFD166',
-    tickfont_color='#FFD166',
-    secondary_y=False
-)
-
-fig4.update_yaxes(
-    title_text='Temperature (°C)',
-    title_font_color='#EF476F',
-    tickfont_color='#EF476F',
-    secondary_y=True
-)
-
-st.plotly_chart(fig4, use_container_width=True)
     
     st.divider()
     
