@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+import warnings
+warnings.filterwarnings('ignore')
 
 st.set_page_config(
     page_title="Load Energy Data",
@@ -39,6 +41,19 @@ st.markdown("""
         border-radius: 10px;
         margin: 10px 0;
     }
+    .missing-data-warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 10px;
+        margin: 10px 0;
+    }
+    .data-quality-box {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -56,8 +71,248 @@ if 'prediction_settings' not in st.session_state:
         'start_date': None,
         'data_type': None
     }
+if 'data_quality_report' not in st.session_state:
+    st.session_state.data_quality_report = {}
 
-# Function to generate survey-based data with user-selected dates
+# Function to detect date columns intelligently
+def detect_date_columns(df):
+    """Automatically detect date/time columns in the dataframe"""
+    date_columns = []
+    
+    for col in df.columns:
+        col_str = str(col).lower()
+        
+        # Check column name for date/time keywords
+        date_keywords = ['date', 'time', 'day', 'timestamp', 'dt', 'datetime', 'period']
+        if any(keyword in col_str for keyword in date_keywords):
+            date_columns.append(col)
+            continue
+        
+        # Check data type
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            date_columns.append(col)
+            continue
+        
+        # Try to parse first few non-null values
+        sample_data = df[col].dropna().head(5)
+        if len(sample_data) > 0:
+            # Try to detect common date patterns
+            date_patterns = [
+                r'\d{4}-\d{2}-\d{2}',
+                r'\d{2}/\d{2}/\d{4}',
+                r'\d{2}-\d{2}-\d{4}',
+                r'\d{4}/\d{2}/\d{2}',
+            ]
+            
+            sample_str = sample_data.astype(str).str.cat(sep=' ')
+            if any(pd.Series(date_patterns).apply(lambda p: bool(pd.Series([sample_str]).str.contains(p).any()))):
+                date_columns.append(col)
+    
+    return list(set(date_columns))
+
+# Function to detect numeric columns (for consumption)
+def detect_numeric_columns(df):
+    """Detect numeric columns for energy consumption"""
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    
+    # Also look for columns with numeric names
+    energy_keywords = ['kwh', 'consumption', 'usage', 'energy', 'power', 'load', 'demand', 'value']
+    for col in df.columns:
+        col_str = str(col).lower()
+        if any(keyword in col_str for keyword in energy_keywords):
+            # Try to convert to numeric
+            try:
+                pd.to_numeric(df[col], errors='coerce')
+                if col not in numeric_cols:
+                    numeric_cols.append(col)
+            except:
+                pass
+    
+    return numeric_cols
+
+# Function to analyze data quality
+def analyze_data_quality(df, date_col, consumption_col):
+    """Analyze data quality and missing values"""
+    report = {
+        'total_rows': len(df),
+        'date_missing': 0,
+        'consumption_missing': 0,
+        'date_range': None,
+        'consumption_stats': {},
+        'quality_score': 100,
+        'issues': []
+    }
+    
+    # Check missing values
+    if date_col:
+        date_missing = df[date_col].isnull().sum()
+        report['date_missing'] = date_missing
+        if date_missing > 0:
+            report['quality_score'] -= 30
+            report['issues'].append(f"Missing dates: {date_missing} rows")
+    
+    if consumption_col:
+        consumption_missing = df[consumption_col].isnull().sum()
+        report['consumption_missing'] = consumption_missing
+        if consumption_missing > 0:
+            report['quality_score'] -= 30
+            report['issues'].append(f"Missing consumption values: {consumption_missing} rows")
+    
+    # Check date range
+    if date_col and df[date_col].notna().any():
+        valid_dates = df[date_col].dropna()
+        if len(valid_dates) > 0:
+            try:
+                dates_converted = pd.to_datetime(valid_dates)
+                report['date_range'] = {
+                    'start': dates_converted.min(),
+                    'end': dates_converted.max(),
+                    'days': (dates_converted.max() - dates_converted.min()).days
+                }
+            except:
+                report['issues'].append("Date column contains invalid date formats")
+    
+    # Check consumption statistics
+    if consumption_col and df[consumption_col].notna().any():
+        valid_consumption = pd.to_numeric(df[consumption_col], errors='coerce')
+        report['consumption_stats'] = {
+            'mean': valid_consumption.mean(),
+            'min': valid_consumption.min(),
+            'max': valid_consumption.max(),
+            'std': valid_consumption.std()
+        }
+        
+        # Check for zeros or negative values (if not expected)
+        negative_count = (valid_consumption < 0).sum()
+        if negative_count > 0:
+            report['issues'].append(f"Negative consumption values: {negative_count} rows")
+    
+    # Check for duplicates
+    duplicates = df.duplicated(subset=[date_col] if date_col else []).sum()
+    if duplicates > 0:
+        report['issues'].append(f"Duplicate dates: {duplicates} rows")
+        report['quality_score'] -= 10
+    
+    return report
+
+# Function to clean and prepare data
+def clean_and_prepare_data(df, date_col, consumption_col, location_col=None, fill_method='interpolate'):
+    """Clean and prepare the data for analysis"""
+    df_clean = df.copy()
+    
+    # Store original column names for reference
+    original_columns = {
+        'date': date_col,
+        'consumption': consumption_col,
+        'location': location_col
+    }
+    
+    # 1. Handle date column
+    if date_col:
+        df_clean['Date'] = pd.to_datetime(df_clean[date_col], errors='coerce')
+    else:
+        # Create dummy dates if no date column
+        st.warning("No date column found. Creating sequential dates starting from today.")
+        df_clean['Date'] = pd.date_range(start=datetime.now(), periods=len(df_clean), freq='D')
+    
+    # 2. Handle consumption column
+    if consumption_col:
+        df_clean['Energy_Consumption_kWh'] = pd.to_numeric(df_clean[consumption_col], errors='coerce')
+    else:
+        st.error("No consumption column found. Please select a numeric column.")
+        return None
+    
+    # 3. Handle location column
+    if location_col:
+        df_clean['Location'] = df_clean[location_col].astype(str)
+    elif 'Location' not in df_clean.columns:
+        df_clean['Location'] = 'Unknown'
+    
+    # 4. Handle missing values in date column
+    date_missing = df_clean['Date'].isnull().sum()
+    if date_missing > 0:
+        st.warning(f"Found {date_missing} rows with invalid dates. These rows will be dropped.")
+        df_clean = df_clean.dropna(subset=['Date'])
+    
+    # 5. Handle missing values in consumption column
+    consumption_missing_before = df_clean['Energy_Consumption_kWh'].isnull().sum()
+    
+    if consumption_missing_before > 0:
+        st.info(f"Found {consumption_missing_before} rows with missing consumption values.")
+        
+        if fill_method == 'interpolate':
+            # Sort by date first
+            df_clean = df_clean.sort_values('Date')
+            # Interpolate missing values
+            df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].interpolate(method='linear')
+            # Fill any remaining NaNs with forward/backward fill
+            df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(method='ffill').fillna(method='bfill')
+            st.success(f"Missing values filled using interpolation")
+        
+        elif fill_method == 'mean':
+            mean_value = df_clean['Energy_Consumption_kWh'].mean()
+            df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(mean_value)
+            st.success(f"Missing values filled with mean: {mean_value:.2f} kWh")
+        
+        elif fill_method == 'drop':
+            df_clean = df_clean.dropna(subset=['Energy_Consumption_kWh'])
+            st.success(f"Dropped {consumption_missing_before} rows with missing consumption values")
+    
+    # 6. Sort by date
+    df_clean = df_clean.sort_values('Date').reset_index(drop=True)
+    
+    # 7. Add source info
+    df_clean['Source'] = 'Uploaded Data'
+    df_clean['Original_Date_Column'] = date_col
+    df_clean['Original_Consumption_Column'] = consumption_col
+    
+    # 8. Calculate quality metrics
+    consumption_missing_after = df_clean['Energy_Consumption_kWh'].isnull().sum()
+    
+    quality_report = {
+        'original_rows': len(df),
+        'cleaned_rows': len(df_clean),
+        'date_missing_removed': date_missing,
+        'consumption_missing_filled': consumption_missing_before - consumption_missing_after,
+        'consumption_missing_remaining': consumption_missing_after,
+        'date_range': {
+            'start': df_clean['Date'].min(),
+            'end': df_clean['Date'].max(),
+            'days': (df_clean['Date'].max() - df_clean['Date'].min()).days
+        },
+        'fill_method_used': fill_method
+    }
+    
+    return df_clean, quality_report
+
+# Function to parse uploaded file with intelligent detection
+def parse_uploaded_file(uploaded_file):
+    """Parse uploaded file with intelligent column detection"""
+    try:
+        # Determine file type and read
+        if uploaded_file.name.endswith('.csv'):
+            # Try different encodings for CSV
+            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+            df = None
+            for encoding in encodings:
+                try:
+                    uploaded_file.seek(0)
+                    df = pd.read_csv(uploaded_file, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if df is None:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, encoding='utf-8', errors='replace')
+        else:
+            # For Excel files
+            df = pd.read_excel(uploaded_file)
+        
+        return df, None
+    except Exception as e:
+        return None, str(e)
+
+# Function to generate survey-based data (unchanged)
 def generate_survey_based_data(start_date=None, months=12):
     """Generate realistic data based on survey responses with dynamic dates"""
     if 'user_data' not in st.session_state or not st.session_state.user_data:
@@ -74,7 +329,7 @@ def generate_survey_based_data(start_date=None, months=12):
     if isinstance(months, int):
         end_date = start_date + timedelta(days=months*30)
     else:
-        end_date = start_date + timedelta(days=365)  # Default 1 year
+        end_date = start_date + timedelta(days=365)
     
     # Generate dates
     dates = pd.date_range(start=start_date, end=end_date, freq='D')
@@ -83,15 +338,14 @@ def generate_survey_based_data(start_date=None, months=12):
     user_data = st.session_state.user_data
     
     # Extract key parameters from survey
-    monthly_usage = user_data.get('monthly_consumption', 900)  # Default 900 kWh
+    monthly_usage = user_data.get('monthly_consumption', 900)
     if monthly_usage == 0:
-        monthly_usage = 900  # Fallback
+        monthly_usage = 900
     
     location = user_data.get('household', {}).get('location', 'Chennai')
     num_appliances = len(user_data.get('appliances', []))
-    ac_months = user_data.get('usage', {}).get('ac_months', 6)
     
-    # Calculate daily average from monthly
+    # Calculate daily average
     daily_avg = monthly_usage / 30
     
     # Generate consumption pattern
@@ -102,30 +356,27 @@ def generate_survey_based_data(start_date=None, months=12):
         # Base consumption
         base = daily_avg
         
-        # Day of week pattern (higher on weekdays)
+        # Day of week pattern
         day_of_week = date.weekday()
-        if day_of_week < 5:  # Weekday
+        if day_of_week < 5:
             base *= 1.15
-        else:  # Weekend
+        else:
             base *= 0.85
         
-        # Month of year pattern (seasonality)
+        # Seasonality
         month = date.month
         day_of_year = date.dayofyear
         
-        # Enhanced seasonality based on location
-        if location.lower() in ['chennai', 'madurai', 'hyderabad']:  # Hot cities
-            # Strong summer peak
-            if month in [3, 4, 5, 6]:  # Summer
+        if location.lower() in ['chennai', 'madurai', 'hyderabad']:
+            if month in [3, 4, 5, 6]:
                 seasonal_factor = 1.4
-            elif month in [7, 8, 9]:  # Monsoon
+            elif month in [7, 8, 9]:
                 seasonal_factor = 1.2
-            elif month in [10, 11]:  # Post-monsoon
+            elif month in [10, 11]:
                 seasonal_factor = 1.0
-            else:  # Winter
+            else:
                 seasonal_factor = 0.9
-        else:  # Other locations
-            # Moderate seasonality
+        else:
             seasonal_factor = 1 + 0.3 * np.sin(2 * np.pi * day_of_year / 365)
         
         base *= seasonal_factor
@@ -134,23 +385,20 @@ def generate_survey_based_data(start_date=None, months=12):
         appliance_factor = 1 + (num_appliances * 0.03)
         base *= appliance_factor
         
-        # Random variation (10-20% of base)
+        # Random variation
         random_variation = np.random.normal(0, base * 0.15)
         final_consumption = max(base + random_variation, daily_avg * 0.5)
         
-        # Generate realistic temperature based on location and season
+        # Temperature
         if location.lower() in ['chennai', 'madurai', 'hyderabad']:
-            # Hot climate
             base_temp = 28 + 8 * np.sin(2 * np.pi * (day_of_year - 90) / 365)
         elif location.lower() in ['bangalore', 'coimbatore']:
-            # Moderate climate
             base_temp = 22 + 6 * np.sin(2 * np.pi * (day_of_year - 90) / 365)
         else:
-            # Default
             base_temp = 25 + 7 * np.sin(2 * np.pi * (day_of_year - 90) / 365)
         
         temp = base_temp + np.random.normal(0, 3)
-        temp = max(min(temp, 45), 10)  # Clamp between 10-45°C
+        temp = max(min(temp, 45), 10)
         
         consumption.append(round(final_consumption, 2))
         temperatures.append(round(temp, 1))
@@ -174,41 +422,26 @@ def generate_survey_based_data(start_date=None, months=12):
     
     return df
 
-# Function to parse uploaded file with date selection
-def parse_uploaded_file(uploaded_file, start_date=None, months=12):
-    """Parse uploaded file and prepare for analysis"""
-    try:
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
-        
-        # Try to parse date columns
-        date_cols = [col for col in df.columns if any(keyword in col.lower() 
-                                                    for keyword in ['date', 'time', 'day', 'timestamp'])]
-        
-        if date_cols:
-            for col in date_cols:
-                try:
-                    df[col] = pd.to_datetime(df[col])
-                except:
-                    continue
-        
-        return df, None
-    except Exception as e:
-        return None, str(e)
-
-# Function to generate sample data
-def generate_sample_data(start_date=None, months=12):
-    """Generate realistic sample data with dynamic dates"""
+# Function to generate sample data with date range selection
+def generate_sample_data(start_date=None, end_date=None, months=12):
+    """Generate realistic sample data with user-defined date range"""
     if start_date is None:
         start_date = datetime.now() - timedelta(days=365)
     
-    end_date = start_date + timedelta(days=months*30)
+    if end_date is None:
+        if isinstance(months, int):
+            end_date = start_date + timedelta(days=months*30)
+        else:
+            end_date = start_date + timedelta(days=365)
+    
+    # Ensure end_date is after start_date
+    if end_date <= start_date:
+        end_date = start_date + timedelta(days=365)
+    
     dates = pd.date_range(start=start_date, end=end_date, freq='D')
     
     # Base pattern
-    base_daily = 30  # Average 30 kWh per day
+    base_daily = 30
     
     # Complex seasonality
     seasonal = 8 * np.sin(2 * np.pi * np.arange(len(dates)) / 365)
@@ -216,21 +449,21 @@ def generate_sample_data(start_date=None, months=12):
     # Weekly pattern
     weekly = np.where(dates.weekday < 5, 4, -4)
     
-    # Trend (slight increase over time)
+    # Trend
     trend = np.linspace(0, 3, len(dates))
     
-    # Holidays (random low consumption days)
+    # Holidays
     holidays = np.zeros(len(dates))
-    holiday_indices = np.random.choice(len(dates), size=10, replace=False)
+    holiday_indices = np.random.choice(len(dates), size=min(10, len(dates)//10), replace=False)
     holidays[holiday_indices] = -10
     
     # Noise
     noise = np.random.normal(0, 2.5, len(dates))
     
     consumption = base_daily + seasonal + weekly + trend + holidays + noise
-    consumption = np.maximum(consumption, 15)  # Minimum
+    consumption = np.maximum(consumption, 15)
     
-    # Temperature with seasonality
+    # Temperature
     temp_base = 20 + 12 * np.sin(2 * np.pi * np.arange(len(dates)) / 365)
     temp_noise = np.random.normal(0, 4, len(dates))
     temperature = temp_base + temp_noise
@@ -242,11 +475,13 @@ def generate_sample_data(start_date=None, months=12):
         'Temperature_C': np.round(temperature, 1),
         'Source': 'Sample Data',
         'Location': 'Sample City',
-        'Household_Size': 4
+        'Household_Size': 4,
+        'Sample_Period': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
     })
     
     st.session_state.prediction_settings.update({
         'start_date': start_date,
+        'end_date': end_date,
         'prediction_months': months,
         'data_type': 'sample'
     })
@@ -269,7 +504,6 @@ with tab1:
     """, unsafe_allow_html=True)
     
     if 'survey_completed' in st.session_state and st.session_state.survey_completed:
-        # Date selection for survey data
         col1, col2 = st.columns(2)
         
         with col1:
@@ -282,7 +516,7 @@ with tab1:
         
         with col2:
             prediction_months = st.number_input(
-                "Months to Generate/Predict",
+                "Months to Generate",
                 min_value=1,
                 max_value=36,
                 value=12,
@@ -299,6 +533,11 @@ with tab1:
                 if df is not None:
                     st.session_state.forecast_data = df
                     st.session_state.data_loaded = True
+                    st.session_state.data_quality_report = {
+                        'data_type': 'survey',
+                        'date_range': f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}",
+                        'total_records': len(df)
+                    }
                     st.success(f"✅ Generated {len(df)} days of personalized data!")
                     st.rerun()
                 else:
@@ -328,110 +567,224 @@ with tab2:
         st.success(f"📄 File uploaded: {uploaded_file.name}")
         
         # Parse the file
-        df, error = parse_uploaded_file(uploaded_file)
+        with st.spinner("Analyzing uploaded file..."):
+            df, error = parse_uploaded_file(uploaded_file)
         
         if error:
-            st.error(f"❌ Error: {error}")
+            st.error(f"❌ Error reading file: {error}")
         elif df is not None:
-            # Show preview
-            st.markdown("#### 📋 Data Preview")
-            st.dataframe(df.head(), use_container_width=True)
+            # Show file info
+            st.markdown("#### 📋 File Information")
+            col_info1, col_info2, col_info3 = st.columns(3)
+            with col_info1:
+                st.metric("Rows", len(df))
+            with col_info2:
+                st.metric("Columns", len(df.columns))
+            with col_info3:
+                st.metric("File Size", f"{uploaded_file.size / 1024:.1f} KB")
             
-            st.markdown("#### 🎯 Column Mapping")
+            # Show preview
+            st.markdown("#### 👀 Data Preview (First 10 rows)")
+            st.dataframe(df.head(10), use_container_width=True)
+            
+            # Show column types
+            st.markdown("#### 📝 Column Types")
+            dtype_df = pd.DataFrame({
+                'Column': df.columns,
+                'Type': df.dtypes.astype(str),
+                'Non-Null': df.notnull().sum().values,
+                'Null %': (df.isnull().sum().values / len(df) * 100).round(1)
+            })
+            st.dataframe(dtype_df, use_container_width=True)
+            
+            st.markdown("#### 🎯 Intelligent Column Detection")
             
             # Auto-detect columns
-            date_columns = [col for col in df.columns if any(keyword in col.lower() 
-                                                           for keyword in ['date', 'time', 'day', 'timestamp'])]
-            numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+            date_columns = detect_date_columns(df)
+            numeric_columns = detect_numeric_columns(df)
+            all_columns = df.columns.tolist()
             
-            col_a, col_b = st.columns(2)
+            # Create column mapping interface
+            col_a, col_b, col_c = st.columns(3)
             
             with col_a:
-                # Date column selection
-                date_col = st.selectbox(
-                    "Date/Time Column",
-                    options=['Select column...'] + df.columns.tolist(),
-                    index=date_columns[0] + 1 if date_columns else 1,
-                    help="Select the column containing dates or timestamps"
-                )
+                st.markdown("**Date/Time Column**")
+                if date_columns:
+                    date_col = st.selectbox(
+                        "Select date column",
+                        options=['Auto-detect'] + all_columns,
+                        index=0,
+                        help="Column containing dates or timestamps",
+                        key="date_col_select"
+                    )
+                    if date_col == 'Auto-detect':
+                        date_col = date_columns[0] if date_columns else None
+                        if date_col:
+                            st.success(f"✅ Auto-detected: {date_col}")
+                else:
+                    st.warning("No date columns detected")
+                    date_col = st.selectbox(
+                        "Select date column",
+                        options=['None found'] + all_columns,
+                        help="Manually select column containing dates",
+                        key="date_col_manual"
+                    )
+                    if date_col == 'None found':
+                        date_col = None
             
             with col_b:
-                # Consumption column selection
-                consumption_col = st.selectbox(
-                    "Energy Consumption Column (kWh)",
-                    options=['Select column...'] + numeric_columns,
-                    index=numeric_columns[0] + 1 if numeric_columns else 1,
-                    help="Select the column containing energy consumption values"
-                )
-            
-            # Additional settings for uploaded data
-            st.markdown("#### ⚙️ Analysis Settings")
-            
-            col_c, col_d = st.columns(2)
+                st.markdown("**Energy Consumption Column**")
+                if numeric_columns:
+                    consumption_col = st.selectbox(
+                        "Select consumption column",
+                        options=['Auto-detect'] + all_columns,
+                        index=0,
+                        help="Column containing energy consumption values (kWh)",
+                        key="consumption_col_select"
+                    )
+                    if consumption_col == 'Auto-detect':
+                        consumption_col = numeric_columns[0] if numeric_columns else None
+                        if consumption_col:
+                            st.success(f"✅ Auto-detected: {consumption_col}")
+                else:
+                    st.warning("No numeric columns detected")
+                    consumption_col = st.selectbox(
+                        "Select consumption column",
+                        options=['None found'] + all_columns,
+                        help="Manually select numeric column",
+                        key="consumption_col_manual"
+                    )
+                    if consumption_col == 'None found':
+                        consumption_col = None
             
             with col_c:
-                future_months = st.number_input(
-                    "Months to Predict",
-                    min_value=1,
-                    max_value=24,
-                    value=6,
-                    help="How many months into the future to forecast"
+                st.markdown("**Location Column (Optional)**")
+                location_col = st.selectbox(
+                    "Select location column",
+                    options=['Not specified'] + all_columns,
+                    help="Column containing location information",
+                    key="location_col_select"
                 )
+                if location_col == 'Not specified':
+                    location_col = None
             
-            with col_d:
-                if date_col != 'Select column...':
-                    # Show date range of uploaded data
-                    try:
-                        df_temp = df.copy()
-                        df_temp[date_col] = pd.to_datetime(df_temp[date_col])
-                        min_date = df_temp[date_col].min()
-                        max_date = df_temp[date_col].max()
-                        st.info(f"Data range: {min_date.strftime('%b %d, %Y')} to {max_date.strftime('%b %d, %Y')}")
-                    except:
-                        pass
-            
-            if st.button("✅ Process and Use This Data", type="primary", use_container_width=True,
-                        disabled=(date_col == 'Select column...' or consumption_col == 'Select column...')):
-                try:
-                    # Clean and prepare data
-                    df_clean = df.copy()
+            # Data quality analysis
+            if date_col and consumption_col:
+                st.markdown("#### 🔍 Data Quality Analysis")
+                
+                with st.spinner("Analyzing data quality..."):
+                    quality_report = analyze_data_quality(df, date_col, consumption_col)
+                    st.session_state.data_quality_report = quality_report
+                
+                # Display quality metrics
+                col_q1, col_q2, col_q3, col_q4 = st.columns(4)
+                
+                with col_q1:
+                    quality_score = quality_report.get('quality_score', 0)
+                    if quality_score >= 80:
+                        st.metric("Quality Score", f"{quality_score}%", "Good", delta_color="normal")
+                    elif quality_score >= 60:
+                        st.metric("Quality Score", f"{quality_score}%", "Fair", delta_color="off")
+                    else:
+                        st.metric("Quality Score", f"{quality_score}%", "Poor", delta_color="inverse")
+                
+                with col_q2:
+                    missing_dates = quality_report.get('date_missing', 0)
+                    st.metric("Missing Dates", missing_dates)
+                
+                with col_q3:
+                    missing_consumption = quality_report.get('consumption_missing', 0)
+                    st.metric("Missing Values", missing_consumption)
+                
+                with col_q4:
+                    if quality_report.get('date_range'):
+                        days = quality_report['date_range']['days']
+                        st.metric("Date Range (days)", days)
+                
+                # Show issues
+                if quality_report.get('issues'):
+                    st.markdown("#### ⚠️ Data Issues Found")
+                    for issue in quality_report['issues']:
+                        st.warning(issue)
+                
+                # Missing value handling options
+                if missing_consumption > 0 or missing_dates > 0:
+                    st.markdown("#### 🛠️ Handle Missing Values")
                     
-                    # Convert date column
-                    df_clean['Date'] = pd.to_datetime(df_clean[date_col])
-                    
-                    # Convert consumption column
-                    df_clean['Energy_Consumption_kWh'] = pd.to_numeric(
-                        df_clean[consumption_col], 
-                        errors='coerce'
+                    fill_method = st.radio(
+                        "How to handle missing consumption values?",
+                        options=['interpolate', 'mean', 'drop'],
+                        format_func=lambda x: {
+                            'interpolate': 'Interpolate (recommended for time series)',
+                            'mean': 'Fill with mean value',
+                            'drop': 'Drop rows with missing values'
+                        }[x],
+                        horizontal=True
                     )
                     
-                    # Drop invalid rows
-                    df_clean = df_clean.dropna(subset=['Date', 'Energy_Consumption_kWh'])
-                    
-                    # Sort by date
-                    df_clean = df_clean.sort_values('Date').reset_index(drop=True)
-                    
-                    # Add source info
-                    df_clean['Source'] = 'Uploaded Data'
-                    
-                    # Add location if available
-                    if 'Location' not in df_clean.columns and 'location' not in df_clean.columns:
-                        df_clean['Location'] = 'Unknown'
-                    
-                    # Store in session state
-                    st.session_state.forecast_data = df_clean
-                    st.session_state.data_loaded = True
-                    st.session_state.prediction_settings.update({
-                        'prediction_months': future_months,
-                        'start_date': df_clean['Date'].max(),
-                        'data_type': 'uploaded'
-                    })
-                    
-                    st.success(f"✅ Data processed successfully! {len(df_clean)} records loaded")
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.error(f"Error processing data: {str(e)}")
+                    st.info(f"**{missing_consumption} missing consumption values** will be handled using: **{fill_method}**")
+                
+                # Additional settings
+                st.markdown("#### ⚙️ Forecasting Settings")
+                
+                col_set1, col_set2 = st.columns(2)
+                
+                with col_set1:
+                    future_months = st.number_input(
+                        "Months to Forecast",
+                        min_value=1,
+                        max_value=24,
+                        value=6,
+                        help="How many months into the future to forecast"
+                    )
+                
+                with col_set2:
+                    if quality_report.get('date_range'):
+                        start_dt = quality_report['date_range']['start']
+                        end_dt = quality_report['date_range']['end']
+                        if start_dt and end_dt:
+                            st.info(f"**Data Range:** {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}")
+                
+                # Process button
+                if st.button("✅ Process and Clean Data", type="primary", use_container_width=True):
+                    with st.spinner("Cleaning and preparing data..."):
+                        result = clean_and_prepare_data(
+                            df, 
+                            date_col, 
+                            consumption_col, 
+                            location_col,
+                            fill_method=fill_method
+                        )
+                        
+                        if result:
+                            df_clean, cleaning_report = result
+                            
+                            # Store in session state
+                            st.session_state.forecast_data = df_clean
+                            st.session_state.data_loaded = True
+                            st.session_state.prediction_settings.update({
+                                'prediction_months': future_months,
+                                'start_date': df_clean['Date'].max(),
+                                'data_type': 'uploaded',
+                                'cleaning_report': cleaning_report
+                            })
+                            
+                            # Show cleaning results
+                            st.success(f"✅ Data cleaned successfully!")
+                            st.markdown("#### 🧹 Cleaning Results")
+                            
+                            col_c1, col_c2, col_c3 = st.columns(3)
+                            with col_c1:
+                                st.metric("Original Rows", cleaning_report['original_rows'])
+                            with col_c2:
+                                st.metric("Cleaned Rows", cleaning_report['cleaned_rows'])
+                            with col_c3:
+                                filled = cleaning_report['consumption_missing_filled']
+                                st.metric("Values Filled", filled)
+                            
+                            st.rerun()
+            else:
+                st.error("Please select both date and consumption columns to proceed.")
 
 with tab3:
     st.markdown("""
@@ -442,10 +795,12 @@ with tab3:
     </div>
     """, unsafe_allow_html=True)
     
-    # Date selection for sample data
-    col1, col2 = st.columns(2)
+    # Date range selection for sample data
+    st.markdown("#### 📅 Select Date Range for Sample Data")
     
-    with col1:
+    col_s1, col_s2, col_s3 = st.columns(3)
+    
+    with col_s1:
         sample_start_date = st.date_input(
             "Start Date",
             value=datetime.now() - timedelta(days=365),
@@ -453,25 +808,87 @@ with tab3:
             key="sample_start"
         )
     
-    with col2:
+    with col_s2:
+        sample_end_date = st.date_input(
+            "End Date",
+            value=datetime.now(),
+            min_value=sample_start_date + timedelta(days=30),
+            key="sample_end"
+        )
+    
+    with col_s3:
         sample_months = st.number_input(
-            "Months of Data",
+            "Or specify months",
             min_value=1,
             max_value=36,
             value=12,
-            key="sample_months"
+            key="sample_months",
+            help="Generate data for this many months from start date"
         )
+        
+        use_months = st.checkbox("Use months instead of end date", value=False)
+    
+    # Data complexity options
+    st.markdown("#### ⚙️ Sample Data Options")
+    
+    col_opt1, col_opt2 = st.columns(2)
+    
+    with col_opt1:
+        include_temperature = st.checkbox("Include temperature data", value=True)
+        include_seasonality = st.checkbox("Include seasonality patterns", value=True)
+    
+    with col_opt2:
+        include_trend = st.checkbox("Include upward trend", value=True)
+        noise_level = st.slider("Noise level", 0.0, 1.0, 0.3)
     
     if st.button("🧪 Generate Sample Data", type="primary", use_container_width=True):
         with st.spinner("Generating realistic sample data..."):
-            df = generate_sample_data(
-                start_date=sample_start_date,
-                months=sample_months
-            )
+            if use_months:
+                df = generate_sample_data(
+                    start_date=sample_start_date,
+                    months=sample_months
+                )
+            else:
+                df = generate_sample_data(
+                    start_date=sample_start_date,
+                    end_date=sample_end_date
+                )
+            
+            # Apply user options
+            if not include_temperature and 'Temperature_C' in df.columns:
+                df = df.drop(columns=['Temperature_C'])
+            
+            if not include_seasonality:
+                # Remove seasonality by adjusting values
+                df['Energy_Consumption_kWh'] = df['Energy_Consumption_kWh'] * 0.9 + 25
+            
+            if not include_trend:
+                # Remove trend
+                df['Energy_Consumption_kWh'] = df['Energy_Consumption_kWh'] - np.linspace(0, 3, len(df))
+            
+            # Adjust noise level
+            if noise_level != 0.3:
+                current_std = df['Energy_Consumption_kWh'].std()
+                target_std = 2.5 * noise_level / 0.3
+                scale_factor = target_std / current_std if current_std > 0 else 1
+                df['Energy_Consumption_kWh'] = df['Energy_Consumption_kWh'] * scale_factor
             
             st.session_state.forecast_data = df
             st.session_state.data_loaded = True
+            st.session_state.data_quality_report = {
+                'data_type': 'sample',
+                'date_range': f"{df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}",
+                'total_records': len(df),
+                'options_used': {
+                    'include_temperature': include_temperature,
+                    'include_seasonality': include_seasonality,
+                    'include_trend': include_trend,
+                    'noise_level': noise_level
+                }
+            }
+            
             st.success(f"✅ Generated {len(df)} days of sample data!")
+            st.info(f"📅 **Date Range:** {df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}")
             st.rerun()
 
 # Data Preview Section
@@ -480,6 +897,9 @@ st.markdown("### 📈 Current Data Status")
 
 if st.session_state.data_loaded and st.session_state.forecast_data is not None:
     data = st.session_state.forecast_data
+    
+    # Display data source info
+    st.markdown(f"#### 📋 Data Source: **{st.session_state.prediction_settings.get('data_type', 'Unknown').title()}**")
     
     # Display metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -496,13 +916,48 @@ if st.session_state.data_loaded and st.session_state.forecast_data is not None:
         st.metric("Avg Daily", f"{avg_consumption:.1f} kWh")
     
     with col4:
-        data_source = st.session_state.prediction_settings.get('data_type', 'Unknown')
-        st.metric("Source", data_source.title())
+        total_days = (data['Date'].max() - data['Date'].min()).days + 1
+        st.metric("Total Days", total_days)
+    
+    # Data quality summary if available
+    if st.session_state.data_quality_report:
+        st.markdown("#### 🔍 Data Quality Summary")
+        
+        quality_cols = st.columns(4)
+        with quality_cols[0]:
+            if 'quality_score' in st.session_state.data_quality_report:
+                score = st.session_state.data_quality_report['quality_score']
+                st.progress(score/100, text=f"Quality: {score}%")
+        
+        with quality_cols[1]:
+            if 'consumption_missing' in st.session_state.data_quality_report:
+                missing = st.session_state.data_quality_report['consumption_missing']
+                if missing == 0:
+                    st.success("✅ No missing values")
+                else:
+                    st.warning(f"⚠️ {missing} missing values")
+        
+        with quality_cols[2]:
+            if 'date_missing' in st.session_state.data_quality_report:
+                missing_dates = st.session_state.data_quality_report['date_missing']
+                if missing_dates == 0:
+                    st.success("✅ Valid dates")
+                else:
+                    st.warning(f"⚠️ {missing_dates} invalid dates")
+        
+        with quality_cols[3]:
+            if 'issues' in st.session_state.data_quality_report:
+                issues = len(st.session_state.data_quality_report['issues'])
+                if issues == 0:
+                    st.success("✅ No issues")
+                else:
+                    st.warning(f"⚠️ {issues} issues found")
     
     # Data preview in tabs
-    tab_preview, tab_stats, tab_viz = st.tabs(["📋 Data Preview", "📊 Statistics", "📈 Visualization"])
+    tab_preview, tab_stats, tab_viz, tab_missing = st.tabs(["📋 Data Preview", "📊 Statistics", "📈 Visualization", "🔍 Missing Data"])
     
     with tab_preview:
+        # Show first 20 rows
         st.dataframe(data.head(20), use_container_width=True)
         
         # Show column info
@@ -510,22 +965,23 @@ if st.session_state.data_loaded and st.session_state.forecast_data is not None:
         col_info = pd.DataFrame({
             'Column': data.columns,
             'Data Type': data.dtypes.astype(str),
-            'Non-Null Count': data.notnull().sum().values,
-            'Unique Values': [data[col].nunique() for col in data.columns]
+            'Non-Null': data.notnull().sum().values,
+            'Null %': (data.isnull().sum().values / len(data) * 100).round(2)
         })
         st.dataframe(col_info, use_container_width=True)
     
     with tab_stats:
         # Basic statistics
         st.markdown("#### 📊 Consumption Statistics")
-        stats = data['Energy_Consumption_kWh'].describe()
-        st.write(stats)
+        if 'Energy_Consumption_kWh' in data.columns:
+            stats = data['Energy_Consumption_kWh'].describe()
+            st.write(stats)
         
         # Monthly statistics
         if len(data) > 30:
             data_monthly = data.copy()
             data_monthly['YearMonth'] = data_monthly['Date'].dt.to_period('M')
-            monthly_stats = data_monthly.groupby('YearMonth')['Energy_Consumption_kWh'].agg(['mean', 'min', 'max', 'sum'])
+            monthly_stats = data_monthly.groupby('YearMonth')['Energy_Consumption_kWh'].agg(['mean', 'min', 'max', 'sum', 'std'])
             st.markdown("#### 📅 Monthly Statistics")
             st.dataframe(monthly_stats, use_container_width=True)
     
@@ -540,13 +996,13 @@ if st.session_state.data_loaded and st.session_state.forecast_data is not None:
             mode='lines',
             name='Energy Consumption',
             line=dict(color='#1f77b4', width=2),
-            hovertemplate='Date: %{x}<br>Consumption: %{y:.1f} kWh<extra></extra>'
+            hovertemplate='Date: %{x|%Y-%m-%d}<br>Consumption: %{y:.1f} kWh<extra></extra>'
         ))
         
-        # Add 7-day moving average
+        # Add 7-day moving average if enough data
         if len(data) > 7:
             data_sorted = data.sort_values('Date')
-            moving_avg = data_sorted['Energy_Consumption_kWh'].rolling(window=7).mean()
+            moving_avg = data_sorted['Energy_Consumption_kWh'].rolling(window=7, min_periods=1).mean()
             fig.add_trace(go.Scatter(
                 x=data_sorted['Date'],
                 y=moving_avg,
@@ -561,12 +1017,67 @@ if st.session_state.data_loaded and st.session_state.forecast_data is not None:
             yaxis_title='Energy Consumption (kWh)',
             hovermode='x unified',
             height=500,
-            showlegend=True
+            showlegend=True,
+            xaxis=dict(
+                rangeselector=dict(
+                    buttons=list([
+                        dict(count=1, label="1m", step="month", stepmode="backward"),
+                        dict(count=6, label="6m", step="month", stepmode="backward"),
+                        dict(count=1, label="YTD", step="year", stepmode="todate"),
+                        dict(count=1, label="1y", step="year", stepmode="backward"),
+                        dict(step="all")
+                    ])
+                ),
+                rangeslider=dict(visible=True),
+                type="date"
+            )
         )
         
         st.plotly_chart(fig, use_container_width=True)
     
-    # Navigation button
+    with tab_missing:
+        # Show missing data analysis
+        st.markdown("#### 🔍 Missing Data Analysis")
+        
+        # Calculate missing values per column
+        missing_data = data.isnull().sum()
+        missing_percentage = (missing_data / len(data) * 100).round(2)
+        
+        missing_df = pd.DataFrame({
+            'Column': missing_data.index,
+            'Missing Values': missing_data.values,
+            'Percentage': missing_percentage.values
+        })
+        missing_df = missing_df[missing_df['Missing Values'] > 0]
+        
+        if len(missing_df) > 0:
+            st.dataframe(missing_df, use_container_width=True)
+            
+            # Visualize missing data
+            fig_missing = go.Figure(data=[
+                go.Bar(
+                    x=missing_df['Column'],
+                    y=missing_df['Percentage'],
+                    text=missing_df['Percentage'].apply(lambda x: f'{x}%'),
+                    textposition='auto',
+                    marker_color='#ff6b6b'
+                )
+            ])
+            
+            fig_missing.update_layout(
+                title='Percentage of Missing Values by Column',
+                xaxis_title='Column',
+                yaxis_title='Missing %',
+                height=400
+            )
+            
+            st.plotly_chart(fig_missing, use_container_width=True)
+            
+            st.warning("⚠️ Missing data detected. Consider filling or removing these values for better forecasting.")
+        else:
+            st.success("✅ No missing data found in the current dataset!")
+    
+    # Navigation and export section
     st.markdown("---")
     col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
     
@@ -579,49 +1090,65 @@ if st.session_state.data_loaded and st.session_state.forecast_data is not None:
             st.switch_page("pages/forecast.py")
     
     # Data export option
-    st.markdown("### 💾 Export Data")
-    csv_data = data.to_csv(index=False)
-    st.download_button(
-        label="📥 Download Current Data (CSV)",
-        data=csv_data,
-        file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv",
-        help="Download the current dataset as CSV"
-    )
+    st.markdown("### 💾 Export Options")
+    export_col1, export_col2 = st.columns(2)
+    
+    with export_col1:
+        csv_data = data.to_csv(index=False)
+        st.download_button(
+            label="📥 Download as CSV",
+            data=csv_data,
+            file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            help="Download the current dataset as CSV",
+            use_container_width=True
+        )
+    
+    with export_col2:
+        excel_data = data.to_excel(index=False)
+        st.download_button(
+            label="📥 Download as Excel",
+            data=excel_data,
+            file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="Download the current dataset as Excel",
+            use_container_width=True
+        )
     
 else:
     st.info("👈 Select a data source option above to begin")
     
     # Quick tips
     st.markdown("---")
-    st.markdown("### 💡 Quick Tips")
+    st.markdown("### 💡 Quick Tips for Data Upload")
     
     tips_col1, tips_col2, tips_col3 = st.columns(3)
     
     with tips_col1:
         st.markdown("""
-        **📋 Survey Data**
-        - Based on your household profile
-        - Personalized consumption patterns
-        - Seasonal variations included
+        **📋 Supported Formats**
+        - CSV files (comma or semicolon separated)
+        - Excel files (.xlsx, .xls)
+        - Google Sheets (download as CSV)
         """)
     
     with tips_col2:
         st.markdown("""
-        **📁 Upload Data**
-        - Use your historical records
-        - More accurate predictions
-        - Supports CSV/Excel formats
+        **📊 Column Requirements**
+        - **Date Column:** Any date/time format
+        - **Consumption Column:** Numeric values (kWh)
+        - **Optional:** Location, temperature, etc.
         """)
     
     with tips_col3:
         st.markdown("""
-        **🧪 Sample Data**
-        - Perfect for testing
-        - Realistic patterns
-        - No setup required
+        **🔍 Data Quality**
+        - Missing values auto-detected
+        - Multiple filling options
+        - Data quality scoring
+        - Issue reporting
         """)
 
 # Footer
 st.markdown("---")
-st.caption("💡 Tip: For best results, upload at least 1 year of historical data or complete the detailed survey for personalized predictions")
+st.caption("💡 **Tip:** For best results, upload at least 1 year of historical daily or monthly data. The system automatically detects and handles common data issues.")
