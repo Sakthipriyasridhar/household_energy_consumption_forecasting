@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+import io
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -54,6 +55,10 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
+    /* Hide survey data when not in use */
+    .hidden-tab-content {
+        display: none;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,6 +78,8 @@ if 'prediction_settings' not in st.session_state:
     }
 if 'data_quality_report' not in st.session_state:
     st.session_state.data_quality_report = {}
+if 'current_tab' not in st.session_state:
+    st.session_state.current_tab = "Upload Your Data"  # Default tab
 
 # Function to detect date columns intelligently
 def detect_date_columns(df):
@@ -96,17 +103,12 @@ def detect_date_columns(df):
         # Try to parse first few non-null values
         sample_data = df[col].dropna().head(5)
         if len(sample_data) > 0:
-            # Try to detect common date patterns
-            date_patterns = [
-                r'\d{4}-\d{2}-\d{2}',
-                r'\d{2}/\d{2}/\d{4}',
-                r'\d{2}-\d{2}-\d{4}',
-                r'\d{4}/\d{2}/\d{2}',
-            ]
-            
-            sample_str = sample_data.astype(str).str.cat(sep=' ')
-            if any(pd.Series(date_patterns).apply(lambda p: bool(pd.Series([sample_str]).str.contains(p).any()))):
+            try:
+                # Try to convert to datetime
+                pd.to_datetime(sample_data)
                 date_columns.append(col)
+            except:
+                pass
     
     return list(set(date_columns))
 
@@ -144,22 +146,22 @@ def analyze_data_quality(df, date_col, consumption_col):
     }
     
     # Check missing values
-    if date_col:
+    if date_col and date_col in df.columns:
         date_missing = df[date_col].isnull().sum()
-        report['date_missing'] = date_missing
+        report['date_missing'] = int(date_missing)
         if date_missing > 0:
             report['quality_score'] -= 30
-            report['issues'].append(f"Missing dates: {date_missing} rows")
+            report['issues'].append(f"Missing dates: {int(date_missing)} rows")
     
-    if consumption_col:
+    if consumption_col and consumption_col in df.columns:
         consumption_missing = df[consumption_col].isnull().sum()
-        report['consumption_missing'] = consumption_missing
+        report['consumption_missing'] = int(consumption_missing)
         if consumption_missing > 0:
             report['quality_score'] -= 30
-            report['issues'].append(f"Missing consumption values: {consumption_missing} rows")
+            report['issues'].append(f"Missing consumption values: {int(consumption_missing)} rows")
     
     # Check date range
-    if date_col and df[date_col].notna().any():
+    if date_col and date_col in df.columns and df[date_col].notna().any():
         valid_dates = df[date_col].dropna()
         if len(valid_dates) > 0:
             try:
@@ -169,29 +171,36 @@ def analyze_data_quality(df, date_col, consumption_col):
                     'end': dates_converted.max(),
                     'days': (dates_converted.max() - dates_converted.min()).days
                 }
-            except:
-                report['issues'].append("Date column contains invalid date formats")
+            except Exception as e:
+                report['issues'].append(f"Date column contains invalid date formats: {str(e)}")
     
     # Check consumption statistics
-    if consumption_col and df[consumption_col].notna().any():
-        valid_consumption = pd.to_numeric(df[consumption_col], errors='coerce')
-        report['consumption_stats'] = {
-            'mean': valid_consumption.mean(),
-            'min': valid_consumption.min(),
-            'max': valid_consumption.max(),
-            'std': valid_consumption.std()
-        }
-        
-        # Check for zeros or negative values (if not expected)
-        negative_count = (valid_consumption < 0).sum()
-        if negative_count > 0:
-            report['issues'].append(f"Negative consumption values: {negative_count} rows")
+    if consumption_col and consumption_col in df.columns and df[consumption_col].notna().any():
+        try:
+            valid_consumption = pd.to_numeric(df[consumption_col], errors='coerce')
+            report['consumption_stats'] = {
+                'mean': float(valid_consumption.mean()),
+                'min': float(valid_consumption.min()),
+                'max': float(valid_consumption.max()),
+                'std': float(valid_consumption.std())
+            }
+            
+            # Check for zeros or negative values (if not expected)
+            negative_count = (valid_consumption < 0).sum()
+            if negative_count > 0:
+                report['issues'].append(f"Negative consumption values: {int(negative_count)} rows")
+        except Exception as e:
+            report['issues'].append(f"Error analyzing consumption data: {str(e)}")
     
     # Check for duplicates
-    duplicates = df.duplicated(subset=[date_col] if date_col else []).sum()
-    if duplicates > 0:
-        report['issues'].append(f"Duplicate dates: {duplicates} rows")
-        report['quality_score'] -= 10
+    if date_col and date_col in df.columns:
+        duplicates = df.duplicated(subset=[date_col]).sum()
+        if duplicates > 0:
+            report['issues'].append(f"Duplicate dates: {int(duplicates)} rows")
+            report['quality_score'] -= 10
+    
+    # Ensure quality score is between 0 and 100
+    report['quality_score'] = max(0, min(100, report['quality_score']))
     
     return report
 
@@ -200,90 +209,92 @@ def clean_and_prepare_data(df, date_col, consumption_col, location_col=None, fil
     """Clean and prepare the data for analysis"""
     df_clean = df.copy()
     
-    # Store original column names for reference
-    original_columns = {
-        'date': date_col,
-        'consumption': consumption_col,
-        'location': location_col
-    }
-    
-    # 1. Handle date column
-    if date_col:
-        df_clean['Date'] = pd.to_datetime(df_clean[date_col], errors='coerce')
-    else:
-        # Create dummy dates if no date column
-        st.warning("No date column found. Creating sequential dates starting from today.")
-        df_clean['Date'] = pd.date_range(start=datetime.now(), periods=len(df_clean), freq='D')
-    
-    # 2. Handle consumption column
-    if consumption_col:
-        df_clean['Energy_Consumption_kWh'] = pd.to_numeric(df_clean[consumption_col], errors='coerce')
-    else:
-        st.error("No consumption column found. Please select a numeric column.")
-        return None
-    
-    # 3. Handle location column
-    if location_col:
-        df_clean['Location'] = df_clean[location_col].astype(str)
-    elif 'Location' not in df_clean.columns:
-        df_clean['Location'] = 'Unknown'
-    
-    # 4. Handle missing values in date column
-    date_missing = df_clean['Date'].isnull().sum()
-    if date_missing > 0:
-        st.warning(f"Found {date_missing} rows with invalid dates. These rows will be dropped.")
-        df_clean = df_clean.dropna(subset=['Date'])
-    
-    # 5. Handle missing values in consumption column
-    consumption_missing_before = df_clean['Energy_Consumption_kWh'].isnull().sum()
-    
-    if consumption_missing_before > 0:
-        st.info(f"Found {consumption_missing_before} rows with missing consumption values.")
+    try:
+        # 1. Handle date column
+        if date_col and date_col in df_clean.columns:
+            df_clean['Date'] = pd.to_datetime(df_clean[date_col], errors='coerce')
+        else:
+            # Create dummy dates if no date column
+            st.warning("No valid date column found. Creating sequential dates starting from today.")
+            df_clean['Date'] = pd.date_range(start=datetime.now(), periods=len(df_clean), freq='D')
         
-        if fill_method == 'interpolate':
-            # Sort by date first
-            df_clean = df_clean.sort_values('Date')
-            # Interpolate missing values
-            df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].interpolate(method='linear')
-            # Fill any remaining NaNs with forward/backward fill
-            df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(method='ffill').fillna(method='bfill')
-            st.success(f"Missing values filled using interpolation")
+        # 2. Handle consumption column
+        if consumption_col and consumption_col in df_clean.columns:
+            df_clean['Energy_Consumption_kWh'] = pd.to_numeric(df_clean[consumption_col], errors='coerce')
+        else:
+            st.error("No valid consumption column found. Please select a numeric column.")
+            return None, None
         
-        elif fill_method == 'mean':
-            mean_value = df_clean['Energy_Consumption_kWh'].mean()
-            df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(mean_value)
-            st.success(f"Missing values filled with mean: {mean_value:.2f} kWh")
+        # 3. Handle location column
+        if location_col and location_col in df_clean.columns:
+            df_clean['Location'] = df_clean[location_col].astype(str)
+        elif 'Location' not in df_clean.columns:
+            df_clean['Location'] = 'Unknown'
         
-        elif fill_method == 'drop':
-            df_clean = df_clean.dropna(subset=['Energy_Consumption_kWh'])
-            st.success(f"Dropped {consumption_missing_before} rows with missing consumption values")
-    
-    # 6. Sort by date
-    df_clean = df_clean.sort_values('Date').reset_index(drop=True)
-    
-    # 7. Add source info
-    df_clean['Source'] = 'Uploaded Data'
-    df_clean['Original_Date_Column'] = date_col
-    df_clean['Original_Consumption_Column'] = consumption_col
-    
-    # 8. Calculate quality metrics
-    consumption_missing_after = df_clean['Energy_Consumption_kWh'].isnull().sum()
-    
-    quality_report = {
-        'original_rows': len(df),
-        'cleaned_rows': len(df_clean),
-        'date_missing_removed': date_missing,
-        'consumption_missing_filled': consumption_missing_before - consumption_missing_after,
-        'consumption_missing_remaining': consumption_missing_after,
-        'date_range': {
-            'start': df_clean['Date'].min(),
-            'end': df_clean['Date'].max(),
-            'days': (df_clean['Date'].max() - df_clean['Date'].min()).days
-        },
-        'fill_method_used': fill_method
-    }
-    
-    return df_clean, quality_report
+        # 4. Handle missing values in date column
+        date_missing = df_clean['Date'].isnull().sum()
+        if date_missing > 0:
+            st.warning(f"Found {int(date_missing)} rows with invalid dates. These rows will be dropped.")
+            df_clean = df_clean.dropna(subset=['Date'])
+        
+        # 5. Handle missing values in consumption column
+        consumption_missing_before = df_clean['Energy_Consumption_kWh'].isnull().sum()
+        
+        if consumption_missing_before > 0:
+            st.info(f"Found {int(consumption_missing_before)} rows with missing consumption values.")
+            
+            if fill_method == 'interpolate' and len(df_clean) > 1:
+                # Sort by date first
+                df_clean = df_clean.sort_values('Date')
+                # Interpolate missing values
+                df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].interpolate(method='linear')
+                # Fill any remaining NaNs with forward/backward fill
+                df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(method='ffill').fillna(method='bfill')
+                st.success("Missing values filled using interpolation")
+            
+            elif fill_method == 'mean' and len(df_clean) > 0:
+                mean_value = df_clean['Energy_Consumption_kWh'].mean()
+                if pd.notna(mean_value):
+                    df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(mean_value)
+                    st.success(f"Missing values filled with mean: {mean_value:.2f} kWh")
+                else:
+                    df_clean['Energy_Consumption_kWh'] = df_clean['Energy_Consumption_kWh'].fillna(0)
+                    st.warning("Could not calculate mean, filled missing values with 0")
+            
+            elif fill_method == 'drop':
+                df_clean = df_clean.dropna(subset=['Energy_Consumption_kWh'])
+                st.success(f"Dropped {int(consumption_missing_before)} rows with missing consumption values")
+        
+        # 6. Sort by date
+        df_clean = df_clean.sort_values('Date').reset_index(drop=True)
+        
+        # 7. Add source info
+        df_clean['Source'] = 'Uploaded Data'
+        df_clean['Original_Date_Column'] = date_col if date_col else 'Generated'
+        df_clean['Original_Consumption_Column'] = consumption_col if consumption_col else 'Generated'
+        
+        # 8. Calculate quality metrics
+        consumption_missing_after = df_clean['Energy_Consumption_kWh'].isnull().sum()
+        
+        quality_report = {
+            'original_rows': len(df),
+            'cleaned_rows': len(df_clean),
+            'date_missing_removed': int(date_missing),
+            'consumption_missing_filled': int(consumption_missing_before - consumption_missing_after),
+            'consumption_missing_remaining': int(consumption_missing_after),
+            'date_range': {
+                'start': df_clean['Date'].min(),
+                'end': df_clean['Date'].max(),
+                'days': (df_clean['Date'].max() - df_clean['Date'].min()).days
+            } if len(df_clean) > 0 else None,
+            'fill_method_used': fill_method
+        }
+        
+        return df_clean, quality_report
+        
+    except Exception as e:
+        st.error(f"Error cleaning data: {str(e)}")
+        return None, None
 
 # Function to parse uploaded file with intelligent detection
 def parse_uploaded_file(uploaded_file):
@@ -306,13 +317,14 @@ def parse_uploaded_file(uploaded_file):
                 df = pd.read_csv(uploaded_file, encoding='utf-8', errors='replace')
         else:
             # For Excel files
+            uploaded_file.seek(0)
             df = pd.read_excel(uploaded_file)
         
         return df, None
     except Exception as e:
         return None, str(e)
 
-# Function to generate survey-based data (unchanged)
+# Function to generate survey-based data
 def generate_survey_based_data(start_date=None, months=12):
     """Generate realistic data based on survey responses with dynamic dates"""
     if 'user_data' not in st.session_state or not st.session_state.user_data:
@@ -422,7 +434,7 @@ def generate_survey_based_data(start_date=None, months=12):
     
     return df
 
-# Function to generate sample data with date range selection
+# Function to generate sample data
 def generate_sample_data(start_date=None, end_date=None, months=12):
     """Generate realistic sample data with user-defined date range"""
     if start_date is None:
@@ -494,7 +506,15 @@ st.markdown("### 📋 Select Data Source")
 # Create tabs for different data sources
 tab1, tab2, tab3 = st.tabs(["📊 Use Survey Data", "📁 Upload Your Data", "🧪 Try Sample Data"])
 
+# Initialize variables to control what's shown
+show_survey_data = False
+show_upload_data = False
+show_sample_data = False
+
 with tab1:
+    # Track that we're in survey tab
+    show_survey_data = True
+    
     st.markdown("""
     <div class="option-card">
         <h3>📋 Generate Data from Survey</h3>
@@ -549,6 +569,9 @@ with tab1:
             st.switch_page("pages/survey.py")
 
 with tab2:
+    # Track that we're in upload tab
+    show_upload_data = True
+    
     st.markdown("""
     <div class="option-card">
         <h3>📁 Upload Your Historical Data</h3>
@@ -708,6 +731,9 @@ with tab2:
                         st.warning(issue)
                 
                 # Missing value handling options
+                missing_consumption = quality_report.get('consumption_missing', 0)
+                missing_dates = quality_report.get('date_missing', 0)
+                
                 if missing_consumption > 0 or missing_dates > 0:
                     st.markdown("#### 🛠️ Handle Missing Values")
                     
@@ -723,6 +749,8 @@ with tab2:
                     )
                     
                     st.info(f"**{missing_consumption} missing consumption values** will be handled using: **{fill_method}**")
+                else:
+                    fill_method = 'interpolate'  # Default
                 
                 # Additional settings
                 st.markdown("#### ⚙️ Forecasting Settings")
@@ -735,7 +763,8 @@ with tab2:
                         min_value=1,
                         max_value=24,
                         value=6,
-                        help="How many months into the future to forecast"
+                        help="How many months into the future to forecast",
+                        key="future_months_upload"
                     )
                 
                 with col_set2:
@@ -746,7 +775,7 @@ with tab2:
                             st.info(f"**Data Range:** {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}")
                 
                 # Process button
-                if st.button("✅ Process and Clean Data", type="primary", use_container_width=True):
+                if st.button("✅ Process and Clean Data", type="primary", use_container_width=True, key="process_upload"):
                     with st.spinner("Cleaning and preparing data..."):
                         result = clean_and_prepare_data(
                             df, 
@@ -756,7 +785,7 @@ with tab2:
                             fill_method=fill_method
                         )
                         
-                        if result:
+                        if result and result[0] is not None:
                             df_clean, cleaning_report = result
                             
                             # Store in session state
@@ -764,7 +793,7 @@ with tab2:
                             st.session_state.data_loaded = True
                             st.session_state.prediction_settings.update({
                                 'prediction_months': future_months,
-                                'start_date': df_clean['Date'].max(),
+                                'start_date': df_clean['Date'].max() if len(df_clean) > 0 else None,
                                 'data_type': 'uploaded',
                                 'cleaning_report': cleaning_report
                             })
@@ -775,18 +804,25 @@ with tab2:
                             
                             col_c1, col_c2, col_c3 = st.columns(3)
                             with col_c1:
-                                st.metric("Original Rows", cleaning_report['original_rows'])
+                                st.metric("Original Rows", cleaning_report.get('original_rows', 0))
                             with col_c2:
-                                st.metric("Cleaned Rows", cleaning_report['cleaned_rows'])
+                                st.metric("Cleaned Rows", cleaning_report.get('cleaned_rows', 0))
                             with col_c3:
-                                filled = cleaning_report['consumption_missing_filled']
+                                filled = cleaning_report.get('consumption_missing_filled', 0)
                                 st.metric("Values Filled", filled)
                             
                             st.rerun()
+                        else:
+                            st.error("Failed to clean data. Please check your column selections.")
             else:
                 st.error("Please select both date and consumption columns to proceed.")
+    else:
+        st.info("👆 Upload a file to get started")
 
 with tab3:
+    # Track that we're in sample tab
+    show_sample_data = True
+    
     st.markdown("""
     <div class="option-card">
         <h3>🧪 Generate Sample Data</h3>
@@ -841,7 +877,7 @@ with tab3:
         include_trend = st.checkbox("Include upward trend", value=True)
         noise_level = st.slider("Noise level", 0.0, 1.0, 0.3)
     
-    if st.button("🧪 Generate Sample Data", type="primary", use_container_width=True):
+    if st.button("🧪 Generate Sample Data", type="primary", use_container_width=True, key="generate_sample"):
         with st.spinner("Generating realistic sample data..."):
             if use_months:
                 df = generate_sample_data(
@@ -891,231 +927,280 @@ with tab3:
             st.info(f"📅 **Date Range:** {df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}")
             st.rerun()
 
-# Data Preview Section
+# Data Preview Section - Only show if data is loaded from the CURRENT tab
 st.markdown("---")
-st.markdown("### 📈 Current Data Status")
 
+# Only show data status if we have loaded data AND it matches the current context
 if st.session_state.data_loaded and st.session_state.forecast_data is not None:
     data = st.session_state.forecast_data
+    current_data_type = st.session_state.prediction_settings.get('data_type', '')
     
-    # Display data source info
-    st.markdown(f"#### 📋 Data Source: **{st.session_state.prediction_settings.get('data_type', 'Unknown').title()}**")
+    # Check if we should show the data based on current tab
+    should_show_data = False
     
-    # Display metrics
-    col1, col2, col3, col4 = st.columns(4)
+    if show_survey_data and current_data_type == 'survey':
+        should_show_data = True
+    elif show_upload_data and current_data_type == 'uploaded':
+        should_show_data = True
+    elif show_sample_data and current_data_type == 'sample':
+        should_show_data = True
+    # Also show if no specific tab is active (initial load)
+    elif not (show_survey_data or show_upload_data or show_sample_data):
+        should_show_data = True
     
-    with col1:
-        st.metric("Total Records", f"{len(data):,}")
-    
-    with col2:
-        date_range = f"{data['Date'].min().strftime('%b %d, %Y')} to {data['Date'].max().strftime('%b %d, %Y')}"
-        st.metric("Date Range", date_range)
-    
-    with col3:
-        avg_consumption = data['Energy_Consumption_kWh'].mean()
-        st.metric("Avg Daily", f"{avg_consumption:.1f} kWh")
-    
-    with col4:
-        total_days = (data['Date'].max() - data['Date'].min()).days + 1
-        st.metric("Total Days", total_days)
-    
-    # Data quality summary if available
-    if st.session_state.data_quality_report:
-        st.markdown("#### 🔍 Data Quality Summary")
+    if should_show_data:
+        st.markdown("### 📈 Current Data Status")
         
-        quality_cols = st.columns(4)
-        with quality_cols[0]:
-            if 'quality_score' in st.session_state.data_quality_report:
-                score = st.session_state.data_quality_report['quality_score']
-                st.progress(score/100, text=f"Quality: {score}%")
+        # Display data source info
+        data_source_map = {
+            'survey': 'Survey Data',
+            'uploaded': 'Uploaded Data',
+            'sample': 'Sample Data'
+        }
+        data_source_name = data_source_map.get(current_data_type, 'Unknown')
+        st.markdown(f"#### 📋 Data Source: **{data_source_name}**")
         
-        with quality_cols[1]:
-            if 'consumption_missing' in st.session_state.data_quality_report:
-                missing = st.session_state.data_quality_report['consumption_missing']
-                if missing == 0:
-                    st.success("✅ No missing values")
-                else:
-                    st.warning(f"⚠️ {missing} missing values")
+        # Display metrics
+        col1, col2, col3, col4 = st.columns(4)
         
-        with quality_cols[2]:
-            if 'date_missing' in st.session_state.data_quality_report:
-                missing_dates = st.session_state.data_quality_report['date_missing']
-                if missing_dates == 0:
-                    st.success("✅ Valid dates")
-                else:
-                    st.warning(f"⚠️ {missing_dates} invalid dates")
+        with col1:
+            st.metric("Total Records", f"{len(data):,}")
         
-        with quality_cols[3]:
-            if 'issues' in st.session_state.data_quality_report:
-                issues = len(st.session_state.data_quality_report['issues'])
-                if issues == 0:
-                    st.success("✅ No issues")
-                else:
-                    st.warning(f"⚠️ {issues} issues found")
-    
-    # Data preview in tabs
-    tab_preview, tab_stats, tab_viz, tab_missing = st.tabs(["📋 Data Preview", "📊 Statistics", "📈 Visualization", "🔍 Missing Data"])
-    
-    with tab_preview:
-        # Show first 20 rows
-        st.dataframe(data.head(20), use_container_width=True)
+        with col2:
+            if 'Date' in data.columns and len(data) > 0:
+                date_range = f"{data['Date'].min().strftime('%b %d, %Y')} to {data['Date'].max().strftime('%b %d, %Y')}"
+                st.metric("Date Range", date_range)
+            else:
+                st.metric("Date Range", "N/A")
         
-        # Show column info
-        st.markdown("#### 📝 Column Information")
-        col_info = pd.DataFrame({
-            'Column': data.columns,
-            'Data Type': data.dtypes.astype(str),
-            'Non-Null': data.notnull().sum().values,
-            'Null %': (data.isnull().sum().values / len(data) * 100).round(2)
-        })
-        st.dataframe(col_info, use_container_width=True)
-    
-    with tab_stats:
-        # Basic statistics
-        st.markdown("#### 📊 Consumption Statistics")
-        if 'Energy_Consumption_kWh' in data.columns:
-            stats = data['Energy_Consumption_kWh'].describe()
-            st.write(stats)
+        with col3:
+            if 'Energy_Consumption_kWh' in data.columns:
+                avg_consumption = data['Energy_Consumption_kWh'].mean()
+                st.metric("Avg Daily", f"{avg_consumption:.1f} kWh")
+            else:
+                st.metric("Avg Daily", "N/A")
         
-        # Monthly statistics
-        if len(data) > 30:
-            data_monthly = data.copy()
-            data_monthly['YearMonth'] = data_monthly['Date'].dt.to_period('M')
-            monthly_stats = data_monthly.groupby('YearMonth')['Energy_Consumption_kWh'].agg(['mean', 'min', 'max', 'sum', 'std'])
-            st.markdown("#### 📅 Monthly Statistics")
-            st.dataframe(monthly_stats, use_container_width=True)
-    
-    with tab_viz:
-        # Create time series plot
-        fig = go.Figure()
+        with col4:
+            if 'Date' in data.columns and len(data) > 0:
+                total_days = (data['Date'].max() - data['Date'].min()).days + 1
+                st.metric("Total Days", total_days)
+            else:
+                st.metric("Total Days", "N/A")
         
-        # Add consumption line
-        fig.add_trace(go.Scatter(
-            x=data['Date'],
-            y=data['Energy_Consumption_kWh'],
-            mode='lines',
-            name='Energy Consumption',
-            line=dict(color='#1f77b4', width=2),
-            hovertemplate='Date: %{x|%Y-%m-%d}<br>Consumption: %{y:.1f} kWh<extra></extra>'
-        ))
-        
-        # Add 7-day moving average if enough data
-        if len(data) > 7:
-            data_sorted = data.sort_values('Date')
-            moving_avg = data_sorted['Energy_Consumption_kWh'].rolling(window=7, min_periods=1).mean()
-            fig.add_trace(go.Scatter(
-                x=data_sorted['Date'],
-                y=moving_avg,
-                mode='lines',
-                name='7-Day Moving Avg',
-                line=dict(color='#ff7f0e', width=3, dash='dash')
-            ))
-        
-        fig.update_layout(
-            title='Energy Consumption Over Time',
-            xaxis_title='Date',
-            yaxis_title='Energy Consumption (kWh)',
-            hovermode='x unified',
-            height=500,
-            showlegend=True,
-            xaxis=dict(
-                rangeselector=dict(
-                    buttons=list([
-                        dict(count=1, label="1m", step="month", stepmode="backward"),
-                        dict(count=6, label="6m", step="month", stepmode="backward"),
-                        dict(count=1, label="YTD", step="year", stepmode="todate"),
-                        dict(count=1, label="1y", step="year", stepmode="backward"),
-                        dict(step="all")
-                    ])
-                ),
-                rangeslider=dict(visible=True),
-                type="date"
-            )
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with tab_missing:
-        # Show missing data analysis
-        st.markdown("#### 🔍 Missing Data Analysis")
-        
-        # Calculate missing values per column
-        missing_data = data.isnull().sum()
-        missing_percentage = (missing_data / len(data) * 100).round(2)
-        
-        missing_df = pd.DataFrame({
-            'Column': missing_data.index,
-            'Missing Values': missing_data.values,
-            'Percentage': missing_percentage.values
-        })
-        missing_df = missing_df[missing_df['Missing Values'] > 0]
-        
-        if len(missing_df) > 0:
-            st.dataframe(missing_df, use_container_width=True)
+        # Data quality summary if available
+        if st.session_state.data_quality_report and st.session_state.data_quality_report.get('data_type') == current_data_type:
+            st.markdown("#### 🔍 Data Quality Summary")
             
-            # Visualize missing data
-            fig_missing = go.Figure(data=[
-                go.Bar(
-                    x=missing_df['Column'],
-                    y=missing_df['Percentage'],
-                    text=missing_df['Percentage'].apply(lambda x: f'{x}%'),
-                    textposition='auto',
-                    marker_color='#ff6b6b'
+            quality_cols = st.columns(4)
+            with quality_cols[0]:
+                if 'quality_score' in st.session_state.data_quality_report:
+                    score = st.session_state.data_quality_report['quality_score']
+                    st.progress(score/100, text=f"Quality: {score}%")
+            
+            with quality_cols[1]:
+                if 'consumption_missing' in st.session_state.data_quality_report:
+                    missing = st.session_state.data_quality_report['consumption_missing']
+                    if missing == 0:
+                        st.success("✅ No missing values")
+                    else:
+                        st.warning(f"⚠️ {missing} missing values")
+            
+            with quality_cols[2]:
+                if 'date_missing' in st.session_state.data_quality_report:
+                    missing_dates = st.session_state.data_quality_report['date_missing']
+                    if missing_dates == 0:
+                        st.success("✅ Valid dates")
+                    else:
+                        st.warning(f"⚠️ {missing_dates} invalid dates")
+            
+            with quality_cols[3]:
+                if 'issues' in st.session_state.data_quality_report:
+                    issues = len(st.session_state.data_quality_report['issues'])
+                    if issues == 0:
+                        st.success("✅ No issues")
+                    else:
+                        st.warning(f"⚠️ {issues} issues found")
+        
+        # Data preview in tabs
+        tab_preview, tab_stats, tab_viz, tab_missing = st.tabs(["📋 Data Preview", "📊 Statistics", "📈 Visualization", "🔍 Missing Data"])
+        
+        with tab_preview:
+            # Show first 20 rows
+            st.dataframe(data.head(20), use_container_width=True)
+            
+            # Show column info
+            st.markdown("#### 📝 Column Information")
+            col_info = pd.DataFrame({
+                'Column': data.columns,
+                'Data Type': data.dtypes.astype(str),
+                'Non-Null': data.notnull().sum().values,
+                'Null %': (data.isnull().sum().values / len(data) * 100).round(2)
+            })
+            st.dataframe(col_info, use_container_width=True)
+        
+        with tab_stats:
+            # Basic statistics
+            st.markdown("#### 📊 Consumption Statistics")
+            if 'Energy_Consumption_kWh' in data.columns:
+                stats = data['Energy_Consumption_kWh'].describe()
+                st.write(stats)
+            
+            # Monthly statistics
+            if len(data) > 30 and 'Date' in data.columns:
+                data_monthly = data.copy()
+                data_monthly['YearMonth'] = data_monthly['Date'].dt.to_period('M')
+                monthly_stats = data_monthly.groupby('YearMonth')['Energy_Consumption_kWh'].agg(['mean', 'min', 'max', 'sum', 'std'])
+                st.markdown("#### 📅 Monthly Statistics")
+                st.dataframe(monthly_stats, use_container_width=True)
+        
+        with tab_viz:
+            # Create time series plot
+            if 'Date' in data.columns and 'Energy_Consumption_kWh' in data.columns:
+                fig = go.Figure()
+                
+                # Add consumption line
+                fig.add_trace(go.Scatter(
+                    x=data['Date'],
+                    y=data['Energy_Consumption_kWh'],
+                    mode='lines',
+                    name='Energy Consumption',
+                    line=dict(color='#1f77b4', width=2),
+                    hovertemplate='Date: %{x|%Y-%m-%d}<br>Consumption: %{y:.1f} kWh<extra></extra>'
+                ))
+                
+                # Add 7-day moving average if enough data
+                if len(data) > 7:
+                    data_sorted = data.sort_values('Date')
+                    moving_avg = data_sorted['Energy_Consumption_kWh'].rolling(window=7, min_periods=1).mean()
+                    fig.add_trace(go.Scatter(
+                        x=data_sorted['Date'],
+                        y=moving_avg,
+                        mode='lines',
+                        name='7-Day Moving Avg',
+                        line=dict(color='#ff7f0e', width=3, dash='dash')
+                    ))
+                
+                fig.update_layout(
+                    title='Energy Consumption Over Time',
+                    xaxis_title='Date',
+                    yaxis_title='Energy Consumption (kWh)',
+                    hovermode='x unified',
+                    height=500,
+                    showlegend=True,
+                    xaxis=dict(
+                        rangeselector=dict(
+                            buttons=list([
+                                dict(count=1, label="1m", step="month", stepmode="backward"),
+                                dict(count=6, label="6m", step="month", stepmode="backward"),
+                                dict(count=1, label="YTD", step="year", stepmode="todate"),
+                                dict(count=1, label="1y", step="year", stepmode="backward"),
+                                dict(step="all")
+                            ])
+                        ),
+                        rangeslider=dict(visible=True),
+                        type="date"
+                    )
                 )
-            ])
+                
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("No date or consumption data available for visualization")
+        
+        with tab_missing:
+            # Show missing data analysis
+            st.markdown("#### 🔍 Missing Data Analysis")
             
-            fig_missing.update_layout(
-                title='Percentage of Missing Values by Column',
-                xaxis_title='Column',
-                yaxis_title='Missing %',
-                height=400
+            # Calculate missing values per column
+            missing_data = data.isnull().sum()
+            missing_percentage = (missing_data / len(data) * 100).round(2)
+            
+            missing_df = pd.DataFrame({
+                'Column': missing_data.index,
+                'Missing Values': missing_data.values,
+                'Percentage': missing_percentage.values
+            })
+            missing_df = missing_df[missing_df['Missing Values'] > 0]
+            
+            if len(missing_df) > 0:
+                st.dataframe(missing_df, use_container_width=True)
+                
+                # Visualize missing data
+                fig_missing = go.Figure(data=[
+                    go.Bar(
+                        x=missing_df['Column'],
+                        y=missing_df['Percentage'],
+                        text=missing_df['Percentage'].apply(lambda x: f'{x}%'),
+                        textposition='auto',
+                        marker_color='#ff6b6b'
+                    )
+                ])
+                
+                fig_missing.update_layout(
+                    title='Percentage of Missing Values by Column',
+                    xaxis_title='Column',
+                    yaxis_title='Missing %',
+                    height=400
+                )
+                
+                st.plotly_chart(fig_missing, use_container_width=True)
+                
+                st.warning("⚠️ Missing data detected. Consider filling or removing these values for better forecasting.")
+            else:
+                st.success("✅ No missing data found in the current dataset!")
+        
+        # Navigation and export section
+        st.markdown("---")
+        col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+        
+        with col_nav2:
+            if st.button("🚀 Proceed to Forecasting", type="primary", use_container_width=True, key="goto_forecast"):
+                # Store prediction settings
+                if 'prediction_settings' in st.session_state:
+                    st.session_state.prediction_months = st.session_state.prediction_settings.get('prediction_months', 12)
+                
+                st.switch_page("pages/forecast.py")
+        
+        # Data export option - FIXED Excel export error
+        st.markdown("### 💾 Export Options")
+        export_col1, export_col2 = st.columns(2)
+        
+        with export_col1:
+            csv_data = data.to_csv(index=False)
+            st.download_button(
+                label="📥 Download as CSV",
+                data=csv_data,
+                file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                help="Download the current dataset as CSV",
+                use_container_width=True
             )
-            
-            st.plotly_chart(fig_missing, use_container_width=True)
-            
-            st.warning("⚠️ Missing data detected. Consider filling or removing these values for better forecasting.")
-        else:
-            st.success("✅ No missing data found in the current dataset!")
+        
+        with export_col2:
+            try:
+                # Create Excel file in memory
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    data.to_excel(writer, index=False, sheet_name='EnergyData')
+                excel_data = output.getvalue()
+                
+                st.download_button(
+                    label="📥 Download as Excel",
+                    data=excel_data,
+                    file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    help="Download the current dataset as Excel",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"Error creating Excel file: {str(e)}")
+                st.info("Try downloading as CSV instead")
     
-    # Navigation and export section
-    st.markdown("---")
-    col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
-    
-    with col_nav2:
-        if st.button("🚀 Proceed to Forecasting", type="primary", use_container_width=True, key="goto_forecast"):
-            # Store prediction settings
-            if 'prediction_settings' in st.session_state:
-                st.session_state.prediction_months = st.session_state.prediction_settings.get('prediction_months', 12)
-            
-            st.switch_page("pages/forecast.py")
-    
-    # Data export option
-    st.markdown("### 💾 Export Options")
-    export_col1, export_col2 = st.columns(2)
-    
-    with export_col1:
-        csv_data = data.to_csv(index=False)
-        st.download_button(
-            label="📥 Download as CSV",
-            data=csv_data,
-            file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            help="Download the current dataset as CSV",
-            use_container_width=True
-        )
-    
-    with export_col2:
-        excel_data = data.to_excel(index=False)
-        st.download_button(
-            label="📥 Download as Excel",
-            data=excel_data,
-            file_name=f"energy_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="Download the current dataset as Excel",
-            use_container_width=True
-        )
-    
+    else:
+        # Show message that data exists but from different source
+        st.info(f"📊 Data loaded from **{data_source_map.get(current_data_type, 'another source')}**. Switch to the appropriate tab to view it.")
+
 else:
+    # No data loaded at all
     st.info("👈 Select a data source option above to begin")
     
     # Quick tips
