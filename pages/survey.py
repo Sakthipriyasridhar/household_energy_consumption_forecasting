@@ -557,15 +557,15 @@ if st.session_state.survey_completed:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📊 Go to Data Analysis", use_container_width=True, icon="📈"):
+        if st.button(" Go to Data Analysis", use_container_width=True, icon="📈"):
             st.switch_page("pages/data_loader.py")
     
     with col2:
-        if st.button("🤖 AI Forecasting", use_container_width=True, icon="🔮"):
+        if st.button(" AI Forecasting", use_container_width=True, icon="🔮"):
             st.switch_page("pages/forecast.py")
     
     with col3:
-        if st.button("🏠 Back to Dashboard", use_container_width=True, icon="🏠"):
+        if st.button(" Back to Dashboard", use_container_width=True, icon="🏠"):
             st.switch_page("main.py")
     
     # Show a summary card
@@ -672,13 +672,13 @@ if st.session_state.survey_completed:
     col_edit, col_reset = st.columns(2)
     
     with col_edit:
-        if st.button("✏️ Edit Survey", use_container_width=True, icon="📝"):
+        if st.button(" Edit Survey", use_container_width=True, icon="📝"):
             st.session_state.survey_completed = False
             st.session_state.survey_step = 3
             st.rerun()
     
     with col_reset:
-        if st.button("🔄 Start Fresh", use_container_width=True, icon="🔄"):
+        if st.button(" Start Fresh", use_container_width=True, icon="🔄"):
             for key in ['survey_step', 'survey_completed', 'survey_data', 'user_data']:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -739,3 +739,4 @@ else:
 # Update progress at the end
 st.divider()
 st.caption(f"Progress: Step {st.session_state.survey_step + 1} of {len(steps)}")
+
