@@ -554,7 +554,7 @@ st.divider()
 if st.session_state.survey_completed:
     st.markdown("### 🎉 What would you like to do next?")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         if st.button(" Go to Data Analysis", use_container_width=True, icon="📈"):
@@ -565,9 +565,13 @@ if st.session_state.survey_completed:
             st.switch_page("pages/forecast.py")
     
     with col3:
+        if st.button("To Optimization", use _container_width=True, icon="💡"):
+            st.switch_page("pages/optimization.py")
+    with col4:
         if st.button(" Back to Dashboard", use_container_width=True, icon="🏠"):
             st.switch_page("main.py")
-    
+                
+            
     # Show a summary card
     if "user_data" in st.session_state:
         st.info(f"""
@@ -739,4 +743,5 @@ else:
 # Update progress at the end
 st.divider()
 st.caption(f"Progress: Step {st.session_state.survey_step + 1} of {len(steps)}")
+
 
