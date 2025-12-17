@@ -569,15 +569,8 @@ elif st.session_state.survey_step == 3:
     
     # Final Confirmation
     st.markdown("### ✅ Final Step")
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        agree = st.checkbox("I confirm all information provided is accurate to the best of my knowledge",
-                           help="Your data will be used for personalized forecasting")
-    
-    with col2:
-        if agree:
-            if st.button("🚀 Complete Survey", type="primary", use_container_width=True):
+   
+    st.button("🚀 Complete Survey", type="primary", use_container_width=True):
                 # Store all data in session state
                 st.session_state.survey_completed = True
                 st.session_state.user_data = {
@@ -587,7 +580,6 @@ elif st.session_state.survey_step == 3:
                     **st.session_state.survey_data
                 }
                 st.success("🎉 Survey completed successfully!")
-                st.balloons()
                 st.rerun()
 
 # Navigation Buttons (always visible)
@@ -784,5 +776,6 @@ else:
 # Update progress at the end
 st.divider()
 st.caption(f"Progress: Step {st.session_state.survey_step + 1} of {len(steps)}")
+
 
 
