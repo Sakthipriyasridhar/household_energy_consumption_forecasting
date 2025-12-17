@@ -330,78 +330,65 @@ if st.session_state.get("solar_results"):
     
     st.divider()
     
-    # ========== GRAPH 4: Monthly Generation by Season ==========
-    st.markdown("#### 🌦️ Monthly Solar Generation Pattern")
-    
-    # Create monthly generation pattern based on location
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    
-    # Seasonal factors for different locations
-    seasonal_patterns = {
-        'Chennai': [0.95, 0.98, 1.05, 1.10, 1.15, 1.12, 1.05, 1.02, 1.00, 0.98, 0.95, 0.92],
-        'Coimbatore': [0.98, 1.00, 1.05, 1.08, 1.10, 1.05, 1.02, 1.00, 0.98, 0.95, 0.92, 0.90],
-        'Madurai': [0.95, 0.98, 1.05, 1.12, 1.18, 1.15, 1.08, 1.05, 1.02, 0.98, 0.95, 0.92],
-        'Trichy': [0.96, 0.99, 1.06, 1.11, 1.16, 1.13, 1.06, 1.03, 1.01, 0.98, 0.95, 0.93],
-        'Salem': [0.97, 1.00, 1.04, 1.09, 1.13, 1.10, 1.04, 1.01, 0.99, 0.96, 0.93, 0.91],
-        'Other': [1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]
-    }
-    
-    pattern = seasonal_patterns.get(location, seasonal_patterns['Other'])
-    monthly_gen_pattern = [results['monthly_generation'] * factor for factor in pattern]
-    
-    # Temperature data (for secondary axis)
-    temp_pattern = {
-        'Chennai': [28, 29, 31, 33, 35, 35, 34, 33, 32, 31, 29, 28],
-        'Coimbatore': [27, 28, 30, 31, 31, 29, 28, 28, 28, 27, 26, 26],
-        'Madurai': [29, 30, 32, 34, 35, 34, 33, 32, 31, 30, 29, 28],
-        'Other': [28, 29, 31, 33, 34, 33, 32, 31, 30, 29, 28, 27]
-    }
-    temps = temp_pattern.get(location, temp_pattern['Other'])
-    
-    fig4 = go.Figure()
-    
-    # Add generation bars
-    fig4.add_trace(go.Bar(
+# ========== GRAPH 4: Monthly Generation by Season ==========
+st.markdown("#### 🌦️ Monthly Solar Generation Pattern")
+
+# ... [keep all your data preparation code as is] ...
+
+from plotly.subplots import make_subplots
+
+fig4 = make_subplots(specs=[[{"secondary_y": True}]])
+
+# Add generation bars
+fig4.add_trace(
+    go.Bar(
         x=months,
         y=monthly_gen_pattern,
         name='Solar Generation',
         marker_color='#FFD166',
         text=[f'{val:.0f}' for val in monthly_gen_pattern],
-        textposition='auto',
-    ))
-    
-    # Add temperature line
-    fig4.add_trace(go.Scatter(
+        textposition='auto'
+    ),
+    secondary_y=False
+)
+
+# Add temperature line
+fig4.add_trace(
+    go.Scatter(
         x=months,
         y=temps,
         name='Avg Temperature (°C)',
         line=dict(color='#EF476F', width=3),
         mode='lines+markers'
-    ))
-    
-    # FIXED: Using the newer, cleaner syntax for layout updates
-    fig4.update_layout(
-        title=f'Monthly Solar Generation Pattern for {location}',
-        xaxis_title='Month',
-        yaxis_title='Generation (kWh)',
-        height=400,
-        showlegend=True,
-        hovermode='x unified'
-    )
-    
-    # Add secondary y-axis for temperature
-    fig4.update_yaxes(
-        title_text="Temperature (°C)",
-        secondary_y=True,
-        titlefont=dict(color="#EF476F"),
-        tickfont=dict(color="#EF476F")
-    )
-    
-    # Update the temperature trace to use secondary y-axis
-    fig4.data[1].update(yaxis="y2")
-    
-    st.plotly_chart(fig4, use_container_width=True)
+    ),
+    secondary_y=True
+)
+
+# Update layout
+fig4.update_layout(
+    title=f'Monthly Solar Generation Pattern for {location}',
+    xaxis_title='Month',
+    height=400,
+    showlegend=True,
+    hovermode='x unified'
+)
+
+# Update axes
+fig4.update_yaxes(
+    title_text='Generation (kWh)',
+    title_font_color='#FFD166',
+    tickfont_color='#FFD166',
+    secondary_y=False
+)
+
+fig4.update_yaxes(
+    title_text='Temperature (°C)',
+    title_font_color='#EF476F',
+    tickfont_color='#EF476F',
+    secondary_y=True
+)
+
+st.plotly_chart(fig4, use_container_width=True)
     
     st.divider()
     
