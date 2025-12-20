@@ -287,31 +287,6 @@ def main():
     else:
         # Show Dashboard content
         show_dashboard()
-
-def show_dashboard():
-    """Clean, Professional Dashboard"""
-    
-    # Header Section
-    col_header1, col_header2 = st.columns([3, 1])
-    
-    with col_header1:
-        st.markdown('<div class="main-header">Energy Optimizer AI</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-header">Machine Learning-Powered Energy Management & Optimization Platform</div>', unsafe_allow_html=True)
-    
-    with col_header2:
-        st.markdown(f"<div style='text-align: right; color: #666; font-size: 0.9rem;'>{datetime.now().strftime('%B %d, %Y')}</div>", unsafe_allow_html=True)
-    
-    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
-    
-    # Key Metrics Dashboard
-    st.markdown("### Performance Overview")
-    
-    metrics_data = [
-        {"title": "Avg. Savings", "value": "32%", "change": "+5.2%", "trend": "positive", "icon": "💰"},
-        {"title": "Forecast Accuracy", "value": "85.2%", "change": "+2.1%", "trend": "positive", "icon": "📊"},
-        {"title": "CO₂ Reduced", "value": "12.5t", "change": "Monthly", "trend": "neutral", "icon": "🌱"},
-        {"title": "Users Optimized", "value": "2,847", "change": "+124", "trend": "positive", "icon": "👥"}
-    ]
     
     metric_cols = st.columns(4)
     
@@ -336,9 +311,9 @@ def show_dashboard():
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
     # Main Content Area - Split layout
-    main_col1, main_col2 = st.columns([1, 2])
+    main_col = st.columns()
     
-    with main_col1:
+    with main_col:
         # Vertical Quick Actions Section
         st.markdown("### Quick Actions")
         st.markdown("<div class='vertical-actions-container'>", unsafe_allow_html=True)
@@ -366,197 +341,7 @@ def show_dashboard():
                 st.switch_page(action["page"])
         
         st.markdown("</div>", unsafe_allow_html=True)
-    
-    with main_col2:
-        # Analytics Charts Section
-        st.markdown("### Analytics Dashboard")
-        
-        tab1, tab2, tab3 = st.tabs(["📈 Energy Trends", "💰 Cost Analysis", "🌍 Environmental Impact"])
-        
-        with tab1:
-            # Create sample energy consumption data
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
-            
-            # Simulated data
-            np.random.seed(42)
-            base_consumption = np.array([850, 920, 780, 950, 1100, 1250, 1150, 980])
-            variation = np.random.normal(0, 50, len(months))
-            current_consumption = base_consumption + variation
-            optimized_consumption = current_consumption * 0.75  # 25% reduction
-            
-            fig_trend = go.Figure()
-            fig_trend.add_trace(go.Scatter(
-                x=months, y=current_consumption,
-                mode='lines+markers',
-                name='Current Consumption',
-                line=dict(color='#2E86AB', width=3),
-                marker=dict(size=8, symbol='circle')
-            ))
-            fig_trend.add_trace(go.Scatter(
-                x=months, y=optimized_consumption,
-                mode='lines+markers',
-                name='Optimized Target',
-                line=dict(color='#06D6A0', width=3, dash='dash'),
-                marker=dict(size=8, symbol='diamond')
-            ))
-            
-            fig_trend.update_layout(
-                title="Monthly Energy Consumption (kWh)",
-                height=400,
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                hovermode='x unified',
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                ),
-                xaxis=dict(
-                    gridcolor='#f0f0f0',
-                    showline=True,
-                    linecolor='#e0e0e0'
-                ),
-                yaxis=dict(
-                    gridcolor='#f0f0f0',
-                    showline=True,
-                    linecolor='#e0e0e0',
-                    title='Consumption (kWh)'
-                )
-            )
-            
-            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
-        
-        with tab2:
-            # Cost breakdown pie chart
-            categories = ['HVAC', 'Lighting', 'Appliances', 'Electronics', 'Water Heating', 'Other']
-            costs = [3200, 1200, 1800, 900, 1500, 800]
-            
-            fig_cost = go.Figure(data=[go.Pie(
-                labels=categories,
-                values=costs,
-                hole=0.4,
-                marker=dict(colors=['#2E86AB', '#06D6A0', '#FFD166', '#EF476F', '#118AB2', '#73AB84']),
-                textinfo='label+percent',
-                textposition='outside',
-                texttemplate='%{label}<br>₹%{value:,.0f}<br>(%{percent})',
-                hovertemplate='<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent} of total'
-            )])
-            
-            fig_cost.update_layout(
-                title="Monthly Cost Distribution (₹)",
-                height=400,
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                showlegend=False,
-                annotations=[dict(
-                    text=f"Total:<br>₹{sum(costs):,.0f}",
-                    x=0.5, y=0.5, font_size=16, showarrow=False
-                )]
-            )
-            
-            st.plotly_chart(fig_cost, use_container_width=True, config={'displayModeBar': False})
-        
-        with tab3:
-            # Environmental impact gauge chart
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=68,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Energy Efficiency Score", 'font': {'size': 20}},
-                gauge={
-                    'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "#2E86AB"},
-                    'bar': {'color': "#06D6A0"},
-                    'bgcolor': "white",
-                    'borderwidth': 2,
-                    'bordercolor': "#e0e0e0",
-                    'steps': [
-                        {'range': [0, 40], 'color': '#ff6b6b'},
-                        {'range': [40, 70], 'color': '#ffd166'},
-                        {'range': [70, 100], 'color': '#06D6A0'}
-                    ],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.75,
-                        'value': 90
-                    }
-                }
-            ))
-            
-            fig_gauge.update_layout(
-                height=400,
-                plot_bgcolor='white',
-                paper_bgcolor='white'
-            )
-            
-            st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
-            
-            # Environmental metrics
-            env_col1, env_col2, env_col3 = st.columns(3)
-            with env_col1:
-                st.metric("CO₂ Saved", "12,500 kg", "Monthly")
-            with env_col2:
-                st.metric("Trees Equivalent", "595 trees")
-            with env_col3:
-                st.metric("Cost Savings", "₹8,400", "Monthly")
-    
-    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
-    
-    # Getting Started Section
-    st.markdown("### Getting Started")
-    
-    steps = [
-        {"step": 1, "title": "Upload Data", "desc": "Import your historical energy consumption data", "icon": "📊"},
-        {"step": 2, "title": "Complete Survey", "desc": "Provide details about your appliances and usage patterns", "icon": "📋"},
-        {"step": 3, "title": "Generate Forecast", "desc": "Get AI-powered predictions for future consumption", "icon": "🤖"},
-        {"step": 4, "title": "Optimize", "desc": "Receive personalized recommendations for savings", "icon": "💡"}
-    ]
-    
-    step_cols = st.columns(4)
-    
-    for idx, step in enumerate(steps):
-        with step_cols[idx]:
-            step_html = f"""
-            <div style="text-align: center; padding: 1.5rem; border: 1px solid #e8e8e8; border-radius: 12px; height: 100%;">
-                <div style="background: #2E86AB; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-weight: bold;">
-                    {step['step']}
-                </div>
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">{step['icon']}</div>
-                <h4 style="margin: 0.5rem 0;">{step['title']}</h4>
-                <p style="color: #666; font-size: 0.9rem; margin: 0;">{step['desc']}</p>
-            </div>
-            """
-            st.markdown(step_html, unsafe_allow_html=True)
-    
-    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
-    
-    # CTA Section
-    st.markdown("### Ready to Optimize Your Energy Usage?")
-    
-    cta_col1, cta_col2, cta_col3 = st.columns([1, 2, 1])
-    
-    with cta_col2:
-        st.markdown("Start your journey towards smarter energy management and significant cost savings.")
-        
-        col_start, col_learn = st.columns(2)
-        
-        with col_start:
-            if st.button("🚀 Get Started Now", type="primary", use_container_width=True):
-                st.switch_page("pages/survey.py")
-        
-        with col_learn:
-            github_url = "https://github.com/your-username/energy-optimizer-ai"
-            st.markdown(f"""
-            <div class="secondary-button">
-                <a href="{github_url}" target="_blank" style="text-decoration: none; width: 100%; display: block;">
-                    <button style="width: 100%;">
-                        📚 View on GitHub
-                    </button>
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
-    
+       
     # Footer
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
@@ -576,3 +361,4 @@ def show_dashboard():
 
 if __name__ == "__main__":
     main()
+
