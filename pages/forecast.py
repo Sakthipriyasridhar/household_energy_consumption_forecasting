@@ -27,8 +27,84 @@ st.set_page_config(
 )
 
 # Custom CSS - Professional Dashboard
+# Replace your existing Streamlit tabs CSS (around line 172-180) with this:
+
 st.markdown("""
 <style>
+    /* BIGGER, MORE PROMINENT TABS */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        margin-bottom: 0;
+        padding: 0.5rem 0;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 4rem;
+        padding: 0 2rem;
+        font-size: 1.3rem !important;
+        font-weight: 700 !important;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 15px 15px 0 0;
+        border: 3px solid #dee2e6;
+        border-bottom: 3px solid #1E88E5;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        letter-spacing: 0.5px;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #1E88E5 0%, #0D47A1 100%) !important;
+        color: white !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        border-color: #1E88E5 !important;
+        border-bottom: 3px solid white !important;
+        box-shadow: 0 6px 12px rgba(30, 136, 229, 0.4);
+        transform: translateY(-3px);
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+    }
+    
+    .stTabs [aria-selected="true"]:hover {
+        background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%) !important;
+        transform: translateY(-4px);
+    }
+    
+    /* Tab content area */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 2rem;
+        border: 3px solid #1E88E5;
+        border-top: none;
+        border-radius: 0 0 15px 15px;
+        background: white;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        margin-top: -2px;
+    }
+    
+    /* Bigger icons in tabs */
+    .stTabs [data-baseweb="tab"] span {
+        font-size: 1.5rem;
+        margin-right: 0.75rem;
+        vertical-align: middle;
+    }
+    
+    /* Rest of your existing CSS below... keep all your other CSS styles */
+    .main {
+        padding: 20px;
+    }
+    
+    .dashboard-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 15px 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 1px solid #e0e0e0;
+        transition: transform 0.2s;
+
     /* Main container */
     .main {
         padding: 20px;
@@ -1368,4 +1444,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
