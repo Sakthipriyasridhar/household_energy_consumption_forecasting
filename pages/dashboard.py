@@ -376,7 +376,7 @@ def show_dashboard():
     st.markdown("### Ready to Optimize Your Energy Usage?")
     
     # ANALYTICS DASHBOARD - Show it with an expander instead
-    with st.expander("📊 **Analytics Dashboard**", expanded=False):
+    with st.markdown("📊 **Analytics Dashboard**", expanded=False):
         st.markdown("#### 📈 Detailed Analytics")
         
         tab1, tab2, tab3 = st.tabs(["📈 Energy Trends", "💰 Cost Analysis", "🌍 Environmental Impact"])
