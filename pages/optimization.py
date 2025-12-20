@@ -352,31 +352,153 @@ if monthly_cost > 0 and recommendations:
             st.progress(progress)
             st.caption(f"Monthly savings: {monthly_savings/investment*100:.1f}% of investment value")
 
-# Action Plan Generator
+# Action Plan Generator - FIXED VERSION
 st.divider()
 st.subheader("📋 Generate Action Plan")
 
-if st.button("📥 Download Your Action Plan", type="primary", use_container_width=True):
-    st.success("✅ Action plan generated successfully!")
-    
-    # Show what would be included
-    with st.expander("📄 Plan Contents", expanded=True):
-        st.markdown(f"""
-        **Your Personalized Energy Action Plan Includes:**
-        
-        1. **{len(recommendations)} Priority Recommendations** - Based on your usage patterns
-        2. **Implementation Timeline** - Step-by-step schedule over 6 months
-        3. **Cost-Benefit Analysis** - ROI calculations for each recommendation
-        4. **Vendor Contacts** - Trusted local suppliers in {location}
-        5. **Government Subsidy Guide** - How to claim energy efficiency benefits
-        6. **Monthly Tracking Sheet** - Monitor your progress
-        
-        **Total Estimated Monthly Savings:** ₹{potential_savings:,.0f}
-        **Annual Savings Potential:** ₹{annual_savings:,.0f}
-        
-        *Note: In production, this would generate a downloadable PDF.*
-        """)
+# Initialize session state for action plan
+if 'action_plan_generated' not in st.session_state:
+    st.session_state.action_plan_generated = False
+if 'action_plan_data' not in st.session_state:
+    st.session_state.action_plan_data = None
 
+# Create two buttons side by side
+col_gen, col_down = st.columns(2)
+
+with col_gen:
+    if st.button("🚀 Generate Action Plan", type="primary", use_container_width=True):
+        # Create the action plan data
+        action_plan = {
+            "user_name": user_data.get('name', 'User'),
+            "location": location,
+            "monthly_cost": monthly_cost,
+            "potential_savings": potential_savings,
+            "recommendations": recommendations,
+            "generated_date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "implementation_timeline": timeline_data,
+            "total_estimated_savings": f"₹{potential_savings:,.0f}/month"
+        }
+        
+        # Store in session state
+        st.session_state.action_plan_generated = True
+        st.session_state.action_plan_data = action_plan
+        st.success("✅ Action plan generated successfully!")
+        st.rerun()
+
+# Download button - only enabled after generation
+with col_down:
+    if st.session_state.action_plan_generated and st.session_state.action_plan_data:
+        # Create CSV data
+        plan_data = st.session_state.action_plan_data
+        
+        # Prepare CSV content
+        csv_lines = []
+        csv_lines.append("Energy Optimization Action Plan")
+        csv_lines.append(f"Generated for: {plan_data['user_name']}")
+        csv_lines.append(f"Location: {plan_data['location']}")
+        csv_lines.append(f"Date: {plan_data['generated_date']}")
+        csv_lines.append("")
+        csv_lines.append("RECOMMENDATIONS SUMMARY")
+        csv_lines.append("Title,Priority,Estimated Savings,Category")
+        
+        for rec in plan_data['recommendations']:
+            csv_lines.append(f"{rec['title']},{rec['priority']},{rec['savings']},{rec['category']}")
+        
+        csv_lines.append("")
+        csv_lines.append(f"Total Estimated Monthly Savings: {plan_data['total_estimated_savings']}")
+        
+        csv_content = "\n".join(csv_lines)
+        
+        # Download button
+        st.download_button(
+            label="📥 Download Action Plan (CSV)",
+            data=csv_content,
+            file_name=f"energy_action_plan_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        st.button(
+            "📥 Download Your Action Plan", 
+            use_container_width=True, 
+            disabled=True,
+            help="Please generate the action plan first"
+        )
+
+# Show plan details if generated
+if st.session_state.action_plan_generated and st.session_state.action_plan_data:
+    plan_data = st.session_state.action_plan_data
+    
+    with st.expander("📄 View Generated Action Plan", expanded=True):
+        st.markdown(f"""
+        ## 📋 Your Personalized Energy Action Plan
+        
+        **Generated for:** {plan_data['user_name']}  
+        **Location:** {plan_data['location']}  
+        **Date:** {plan_data['generated_date']}  
+        **Current Monthly Cost:** ₹{plan_data['monthly_cost']:,.0f}  
+        **Potential Monthly Savings:** ₹{plan_data['potential_savings']:,.0f}  
+        
+        ---
+        
+        ### 🎯 **Priority Recommendations ({len(plan_data['recommendations'])})**
+        """)
+        
+        for i, rec in enumerate(plan_data['recommendations'], 1):
+            st.markdown(f"""
+            **{i}. {rec['title']}**  
+            *Priority: {rec['priority']} | Category: {rec['category']}*  
+            📈 **Estimated Savings:** {rec['savings']}/month  
+            🛠️ **Action Required:** {rec['action']}  
+            """)
+        
+        st.markdown(f"""
+        ---
+        
+        ### 📅 **Implementation Timeline**
+        
+        **Immediate (Week 1-2):**
+        - Set AC temperature to 24°C
+        - Replace highest-use bulbs with LED
+        - Install power strips
+        
+        **Short-term (Month 1):**
+        - Complete LED conversion
+        - Install smart plugs
+        - Implement off-peak scheduling
+        
+        **Medium-term (Month 2-3):**
+        - Refrigerator energy audit
+        - Solar water heater assessment
+        
+        **Long-term (Month 4-6):**
+        - Major appliance upgrades if needed
+        - Solar PV system evaluation
+        
+        ---
+        
+        ### 💰 **Financial Summary**
+        
+        | Metric | Value |
+        |--------|-------|
+        | **Total Investment Required** | ₹10,000 - 50,000 |
+        | **Monthly Savings Potential** | {plan_data['total_estimated_savings']} |
+        | **Annual Savings** | ₹{plan_data['potential_savings'] * 12:,.0f} |
+        | **ROI Period** | 6-12 months |
+        | **Payback Period** | 8-18 months |
+        
+        ---
+        
+        ### 📝 **Next Steps**
+        
+        1. **Week 1:** Implement behavioral changes (no cost)
+        2. **Month 1:** Purchase and install LED bulbs
+        3. **Month 2:** Schedule energy audit
+        4. **Month 3:** Evaluate solar options
+        5. **Month 6:** Review progress and adjust
+        
+        *This plan is personalized based on your appliance usage data from the survey.*
+        """)
 # Monthly Tracking
 st.subheader("📱 Track Your Progress")
 
@@ -425,3 +547,4 @@ st.markdown("""
 # Refresh button
 if st.button("🔄 Refresh Recommendations", use_container_width=True):
     st.rerun()
+
