@@ -14,9 +14,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS
+# Add this CSS right after your existing CSS section (around line 120)
+
+# Replace or add to your existing CSS:
 st.markdown("""
 <style>
+    /* Original CSS... */
     .option-card {
         background: white;
         border-radius: 10px;
@@ -25,39 +28,59 @@ st.markdown("""
         border: 2px solid #e0e0e0;
         transition: all 0.3s;
     }
-    .option-card:hover {
-        border-color: #00b4d8;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    /* ... keep all your existing CSS ... */
+    
+    /* NEW CSS FOR BIGGER TABS - Add this at the end */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+        margin-bottom: 0;
     }
-    .data-preview {
-        max-height: 300px;
-        overflow-y: auto;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 10px;
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 3.5rem;
+        padding: 0 1.5rem;
+        font-size: 1.2rem !important;
+        font-weight: 700 !important;
+        background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+        border-radius: 12px 12px 0 0;
+        border: 2px solid #dee2e6;
+        border-bottom: none;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .date-picker-container {
-        background: #f8f9fa;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 10px 0;
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(to bottom, #2E86AB, #1b6b91) !important;
+        color: white !important;
+        border-color: #2E86AB !important;
+        box-shadow: 0 4px 8px rgba(46, 134, 171, 0.3);
+        transform: translateY(-2px);
     }
-    .missing-data-warning {
-        background-color: #fff3cd;
-        border: 1px solid #ffeaa7;
-        border-radius: 5px;
-        padding: 10px;
-        margin: 10px 0;
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background: linear-gradient(to bottom, #e9ecef, #dee2e6);
+        transform: translateY(-1px);
     }
-    .data-quality-box {
-        background-color: #f8f9fa;
-        border-radius: 5px;
-        padding: 15px;
-        margin: 10px 0;
+    
+    .stTabs [aria-selected="true"]:hover {
+        background: linear-gradient(to bottom, #257293, #155673) !important;
     }
-    /* Hide survey data when not in use */
-    .hidden-tab-content {
-        display: none;
+    
+    /* Tab content with shadow */
+    .stTabs [data-baseweb="tab-panel"] {
+        padding: 1.5rem;
+        border: 2px solid #2E86AB;
+        border-top: none;
+        border-radius: 0 0 12px 12px;
+        background-color: white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        margin-top: -1px;
+    }
+    
+    /* Make tab icons bigger */
+    .stTabs [data-baseweb="tab"] span {
+        font-size: 1.3rem;
+        margin-right: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
