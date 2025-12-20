@@ -3,7 +3,7 @@ from datetime import datetime
 
 # Page Configuration
 st.set_page_config(
-    page_title="Energy Optimizer AI",
+    page_title="Household Electricity Consumption Forecaster",
     page_icon="⚡",
     layout="centered"  # Changed from "wide" to "centered"
 )
@@ -262,3 +262,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
