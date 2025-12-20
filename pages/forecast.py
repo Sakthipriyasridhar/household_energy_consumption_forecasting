@@ -275,18 +275,11 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
-    /* Hide the entire Data Loading section status box */
-    .data-loading-status,
-    [data-loaded], 
-    .status-indicator,
-    .checkbox-container {
+    div:contains("Data loaded"),
+    div:contains("forecast_data"),
+    div:contains("No data found") {
         display: none !important;
-    }
-
-    /* If it's a specific element with brackets */
-    div:contains("[Data loaded") {
-        display: none;
-    }  
+    } 
 });
 </style>
 """, unsafe_allow_html=True)
@@ -1457,6 +1450,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
