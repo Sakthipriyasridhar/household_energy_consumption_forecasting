@@ -237,6 +237,7 @@ def main():
             st.switch_page(action["page"])
     
     st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Move To Dashboard To See How Navigate Through </div>', unsafe_allow_html=True)
     
     # Footer - Compact
     st.markdown('<div class="footer">', unsafe_allow_html=True)
@@ -255,7 +256,7 @@ def main():
         st.caption("**Privacy:** Secure")
         github_url = "https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting"
         st.caption(f"[**Open Source:** GitHub]({github_url})")
-    st.markdown('<div class="sub-header">Move to Dashboard to See More</div>', unsafe_allow_html=True)    
+        
  
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -264,6 +265,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
