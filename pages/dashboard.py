@@ -601,16 +601,17 @@ def show_dashboard():
     with cta_col2:
         col_start, col_learn = st.columns(2)
         
-    with col_start:
-        if st.button("🚀 Get Started Now", type="primary", use_container_width=True):
-            st.switch_page("pages/survey.py")
-    with col_learn:
-        github_url = "https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting"
-        st.link_button("📚 View on GitHub", 
-                       github_url,
-                       type="primary",
-                       use_container_width=True)
-                     
+        with col_start:
+            if st.button("🚀 Get Started Now", type="primary", use_container_width=True):
+                st.switch_page("pages/survey.py")
+        
+        with col_learn:
+            github_url = "https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting"
+            st.link_button("📚 View on GitHub", 
+                          github_url, 
+                          type="primary", 
+                          use_container_width=True)
+    
     # Footer
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
