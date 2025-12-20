@@ -391,12 +391,6 @@ def show_dashboard():
             "desc": "Calculate solar ROI and savings potential",
             "page": "pages/solar.py"
         },
-        {
-            "icon": "📈", 
-            "title": "Analytics", 
-            "desc": "View detailed energy consumption analytics",
-            "page": "#analytics"
-        }
     ]
     
     # Create 3x2 grid for navigation cards
@@ -457,141 +451,146 @@ def show_dashboard():
     # "Ready to Optimize Your Energy Usage?" Section
     st.markdown("### Ready to Optimize Your Energy Usage?")
     
-    # ANALYTICS DASHBOARD - Only shown here
-    if st.session_state.get("show_analytics", False):
-        st.markdown("#### 📊 Analytics Dashboard")
+# Replace the analytics section code (around lines 340-440) with this:
+
+# "Ready to Optimize Your Energy Usage?" Section
+st.markdown("### Ready to Optimize Your Energy Usage?")
+
+# ANALYTICS DASHBOARD - Show it with an expander instead
+with st.expander("📊 **Analytics Dashboard**", expanded=False):
+    st.markdown("#### 📈 Detailed Analytics")
+    
+    tab1, tab2, tab3 = st.tabs(["📈 Energy Trends", "💰 Cost Analysis", "🌍 Environmental Impact"])
+    
+    with tab1:
+        # Create sample energy consumption data
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
         
-        tab1, tab2, tab3 = st.tabs(["📈 Energy Trends", "💰 Cost Analysis", "🌍 Environmental Impact"])
+        # Simulated data
+        np.random.seed(42)
+        base_consumption = np.array([850, 920, 780, 950, 1100, 1250, 1150, 980])
+        variation = np.random.normal(0, 50, len(months))
+        current_consumption = base_consumption + variation
+        optimized_consumption = current_consumption * 0.75  # 25% reduction
         
-        with tab1:
-            # Create sample energy consumption data
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
-            
-            # Simulated data
-            np.random.seed(42)
-            base_consumption = np.array([850, 920, 780, 950, 1100, 1250, 1150, 980])
-            variation = np.random.normal(0, 50, len(months))
-            current_consumption = base_consumption + variation
-            optimized_consumption = current_consumption * 0.75  # 25% reduction
-            
-            fig_trend = go.Figure()
-            fig_trend.add_trace(go.Scatter(
-                x=months, y=current_consumption,
-                mode='lines+markers',
-                name='Current Consumption',
-                line=dict(color='#2E86AB', width=3),
-                marker=dict(size=8, symbol='circle')
-            ))
-            fig_trend.add_trace(go.Scatter(
-                x=months, y=optimized_consumption,
-                mode='lines+markers',
-                name='Optimized Target',
-                line=dict(color='#06D6A0', width=3, dash='dash'),
-                marker=dict(size=8, symbol='diamond')
-            ))
-            
-            fig_trend.update_layout(
-                title="Monthly Energy Consumption (kWh)",
-                height=400,
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                hovermode='x unified',
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                ),
-                xaxis=dict(
-                    gridcolor='#f0f0f0',
-                    showline=True,
-                    linecolor='#e0e0e0'
-                ),
-                yaxis=dict(
-                    gridcolor='#f0f0f0',
-                    showline=True,
-                    linecolor='#e0e0e0',
-                    title='Consumption (kWh)'
-                )
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(
+            x=months, y=current_consumption,
+            mode='lines+markers',
+            name='Current Consumption',
+            line=dict(color='#2E86AB', width=3),
+            marker=dict(size=8, symbol='circle')
+        ))
+        fig_trend.add_trace(go.Scatter(
+            x=months, y=optimized_consumption,
+            mode='lines+markers',
+            name='Optimized Target',
+            line=dict(color='#06D6A0', width=3, dash='dash'),
+            marker=dict(size=8, symbol='diamond')
+        ))
+        
+        fig_trend.update_layout(
+            title="Monthly Energy Consumption (kWh)",
+            height=400,
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            xaxis=dict(
+                gridcolor='#f0f0f0',
+                showline=True,
+                linecolor='#e0e0e0'
+            ),
+            yaxis=dict(
+                gridcolor='#f0f0f0',
+                showline=True,
+                linecolor='#e0e0e0',
+                title='Consumption (kWh)'
             )
-            
-            st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+        )
         
-        with tab2:
-            # Cost breakdown pie chart
-            categories = ['HVAC', 'Lighting', 'Appliances', 'Electronics', 'Water Heating', 'Other']
-            costs = [3200, 1200, 1800, 900, 1500, 800]
-            
-            fig_cost = go.Figure(data=[go.Pie(
-                labels=categories,
-                values=costs,
-                hole=0.4,
-                marker=dict(colors=['#2E86AB', '#06D6A0', '#FFD166', '#EF476F', '#118AB2', '#73AB84']),
-                textinfo='label+percent',
-                textposition='outside',
-                texttemplate='%{label}<br>₹%{value:,.0f}<br>(%{percent})',
-                hovertemplate='<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent} of total'
-            )])
-            
-            fig_cost.update_layout(
-                title="Monthly Cost Distribution (₹)",
-                height=400,
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                showlegend=False,
-                annotations=[dict(
-                    text=f"Total:<br>₹{sum(costs):,.0f}",
-                    x=0.5, y=0.5, font_size=16, showarrow=False
-                )]
-            )
-            
-            st.plotly_chart(fig_cost, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+    
+    with tab2:
+        # Cost breakdown pie chart
+        categories = ['HVAC', 'Lighting', 'Appliances', 'Electronics', 'Water Heating', 'Other']
+        costs = [3200, 1200, 1800, 900, 1500, 800]
         
-        with tab3:
-            # Environmental impact gauge chart
-            fig_gauge = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=68,
-                domain={'x': [0, 1], 'y': [0, 1]},
-                title={'text': "Energy Efficiency Score", 'font': {'size': 20}},
-                gauge={
-                    'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "#2E86AB"},
-                    'bar': {'color': "#06D6A0"},
-                    'bgcolor': "white",
-                    'borderwidth': 2,
-                    'bordercolor': "#e0e0e0",
-                    'steps': [
-                        {'range': [0, 40], 'color': '#ff6b6b'},
-                        {'range': [40, 70], 'color': '#ffd166'},
-                        {'range': [70, 100], 'color': '#06D6A0'}
-                    ],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.75,
-                        'value': 90
-                    }
+        fig_cost = go.Figure(data=[go.Pie(
+            labels=categories,
+            values=costs,
+            hole=0.4,
+            marker=dict(colors=['#2E86AB', '#06D6A0', '#FFD166', '#EF476F', '#118AB2', '#73AB84']),
+            textinfo='label+percent',
+            textposition='outside',
+            texttemplate='%{label}<br>₹%{value:,.0f}<br>(%{percent})',
+            hovertemplate='<b>%{label}</b><br>₹%{value:,.0f}<br>%{percent} of total'
+        )])
+        
+        fig_cost.update_layout(
+            title="Monthly Cost Distribution (₹)",
+            height=400,
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            showlegend=False,
+            annotations=[dict(
+                text=f"Total:<br>₹{sum(costs):,.0f}",
+                x=0.5, y=0.5, font_size=16, showarrow=False
+            )]
+        )
+        
+        st.plotly_chart(fig_cost, use_container_width=True, config={'displayModeBar': False})
+    
+    with tab3:
+        # Environmental impact gauge chart
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=68,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Energy Efficiency Score", 'font': {'size': 20}},
+            gauge={
+                'axis': {'range': [None, 100], 'tickwidth': 1, 'tickcolor': "#2E86AB"},
+                'bar': {'color': "#06D6A0"},
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "#e0e0e0",
+                'steps': [
+                    {'range': [0, 40], 'color': '#ff6b6b'},
+                    {'range': [40, 70], 'color': '#ffd166'},
+                    {'range': [70, 100], 'color': '#06D6A0'}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 90
                 }
-            ))
-            
-            fig_gauge.update_layout(
-                height=400,
-                plot_bgcolor='white',
-                paper_bgcolor='white'
-            )
-            
-            st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
-            
-            # Environmental metrics
-            env_col1, env_col2, env_col3 = st.columns(3)
-            with env_col1:
-                st.metric("CO₂ Saved", "12,500 kg", "Monthly")
-            with env_col2:
-                st.metric("Trees Equivalent", "595 trees")
-            with env_col3:
-                st.metric("Cost Savings", "₹8,400", "Monthly")
+            }
+        ))
         
-        st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
+        fig_gauge.update_layout(
+            height=400,
+            plot_bgcolor='white',
+            paper_bgcolor='white'
+        )
+        
+        st.plotly_chart(fig_gauge, use_container_width=True, config={'displayModeBar': False})
+        
+        # Environmental metrics
+        env_col1, env_col2, env_col3 = st.columns(3)
+        with env_col1:
+            st.metric("CO₂ Saved", "12,500 kg", "Monthly")
+        with env_col2:
+            st.metric("Trees Equivalent", "595 trees")
+        with env_col3:
+            st.metric("Cost Savings", "₹8,400", "Monthly")
+
+st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
     # CTA Section
     st.markdown("Start your journey towards smarter energy management and significant cost savings.")
