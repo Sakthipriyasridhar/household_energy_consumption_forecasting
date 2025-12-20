@@ -179,8 +179,8 @@ def main():
     st.markdown('<div class="main-container">', unsafe_allow_html=True)
     
     # Header - Compact
-    st.markdown('<div class="main-header">Energy Optimizer AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Intelligent Energy Management Platform</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Household Electricity Consumption Forecaster</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">A Platform To Help You Forecast & Manage Your Electricity & Environment</div>', unsafe_allow_html=True)
     
     # Quick Actions Container
     st.markdown("<div class='vertical-actions-container'>", unsafe_allow_html=True)
@@ -262,4 +262,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
