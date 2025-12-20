@@ -275,10 +275,17 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
-    // Hide all elements containing "Data loaded"
-    document.querySelectorAll('*').forEach(el => {
-    if (el.textContent.includes('Data loaded')) {
-    el.style.display = 'none';
+    /* Hide the entire Data Loading section status box */
+    .data-loading-status,
+    [data-loaded], 
+    .status-indicator,
+    .checkbox-container {
+        display: none !important;
+    }
+
+    /* If it's a specific element with brackets */
+    div:contains("[Data loaded") {
+        display: none;
     }  
 });
 </style>
@@ -1450,6 +1457,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
