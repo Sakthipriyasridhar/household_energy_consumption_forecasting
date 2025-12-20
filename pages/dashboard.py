@@ -350,7 +350,7 @@ def show_dashboard():
         {"step": 1, "title": "Upload Data", "desc": "Import your historical energy consumption data", "icon": "📊"},
         {"step": 2, "title": "Complete Survey", "desc": "Provide details about your appliances and usage patterns", "icon": "📋"},
         {"step": 3, "title": "Generate Forecast", "desc": "Get AI-powered predictions for future consumption", "icon": "🤖"},
-        {"step": 4, "title": "Optimize", "desc": "Receive personalized recommendations for savings", "icon": "💡"}
+        {"step": 4, "title": "Optimize", "desc": "Receive personalized recommendations for savings", "icon": "💡"},
         {"step": 5, "title": "Solarize", "desc": "Get Your Own Solar Panel Planned & How Much You Can Save", "icon": "☀️"}
         
     ]
