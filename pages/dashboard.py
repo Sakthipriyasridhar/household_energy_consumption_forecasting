@@ -7,7 +7,7 @@ import numpy as np
 
 # Page Configuration
 st.set_page_config(
-    page_title="Energy Optimizer AI",
+    page_title="Energy Forecaster",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -259,7 +259,6 @@ def show_dashboard():
         {"title": "Avg. Savings", "value": "32%", "change": "+5.2%", "trend": "positive", "icon": "💰"},
         {"title": "Forecast Accuracy", "value": "85.2%", "change": "+2.1%", "trend": "positive", "icon": "📊"},
         {"title": "CO₂ Reduced", "value": "12.5t", "change": "Monthly", "trend": "neutral", "icon": "🌱"},
-        {"title": "Users Optimized", "value": "2,847", "change": "+124", "trend": "positive", "icon": "👥"}
     ]
     
     metric_cols = st.columns(4)
@@ -352,6 +351,8 @@ def show_dashboard():
         {"step": 2, "title": "Complete Survey", "desc": "Provide details about your appliances and usage patterns", "icon": "📋"},
         {"step": 3, "title": "Generate Forecast", "desc": "Get AI-powered predictions for future consumption", "icon": "🤖"},
         {"step": 4, "title": "Optimize", "desc": "Receive personalized recommendations for savings", "icon": "💡"}
+        {"step": 5, "title": "Solarize", "desc": "Get Your Own Solar Panel Planned & How Much You Can Save", "icon": "☀️"}
+        
     ]
     
     step_cols = st.columns(4)
