@@ -601,22 +601,14 @@ def show_dashboard():
     with cta_col2:
         col_start, col_learn = st.columns(2)
         
-        with col_start:
-            if st.button("🚀 Get Started Now", type="primary", use_container_width=True):
-                st.switch_page("pages/survey.py")
-        
-        with col_learn:
-            github_url = "https://github.com/your-username/energy-optimizer-ai"
-            st.markdown(f"""
-            <div class="secondary-button">
-                <a href="{github_url}" target="_blank" style="text-decoration: none; width: 100%; display: block;">
-                    <button style="width: 100%;">
-                        📚 View on GitHub
-                    </button>
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
-    
+    with col_start:
+        if st.button("🚀 Get Started Now", type="primary", use_container_width=True):
+            st.switch_page("pages/survey.py")
+    with col_learn:
+        github_url = "https://github.com/your-username/energy-optimizer-ai"
+        if st.button("📚 View on GitHub", type="primary", use_container_width=True):
+            st.markdown(f'<meta http-equiv="refresh" content="0; url={github_url}">', unsafe_allow_html=True)
+          
     # Footer
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
