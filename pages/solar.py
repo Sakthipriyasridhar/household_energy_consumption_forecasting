@@ -562,7 +562,7 @@ if st.session_state.get("solar_results"):
     
 # Action Buttons - ENHANCED VERSION WITH PDF
 st.divider()
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
     if st.button("📄 Generate Detailed Report", use_container_width=True, icon="📊"):
@@ -677,30 +677,8 @@ with col1:
         st.markdown(href, unsafe_allow_html=True)
         st.info("📄 You can save the HTML file and print it as PDF from your browser.")
 
+
 with col2:
-    if st.button("📱 Share Analysis", use_container_width=True, icon="📤"):
-        # Create a shareable summary
-        share_content = f"""🌞 *My Solar Energy Analysis Results* 🌞
-
-📍 Location: {location}
-⚡ System Size: {results['system_size']:.1f} kW
-💰 Investment: ₹{results['investment']:,.0f}
-🏦 Subsidy: ₹{results['subsidy']:,.0f}
-💵 Monthly Savings: ₹{results['monthly_savings']:,.0f}
-📅 Payback Period: {results['payback_years']:.1f} years
-🌱 Annual CO2 Reduction: {results['monthly_generation'] * 0.85 * 12:,.0f} kg
-
-#SolarEnergy #RenewableEnergy #EnergySavings #GreenIndia"""
-        
-        # Copy to clipboard (simulated)
-        st.success("📋 Analysis summary copied to clipboard!")
-        
-        # Display for copying
-        with st.expander("📤 Share this on social media:", expanded=True):
-            st.text_area("Copy this text:", share_content, height=150)
-            st.caption("Select and copy the text above to share on WhatsApp, Facebook, Twitter, etc.")
-
-with col3:
     if st.button("🔄 Recalculate", use_container_width=True):
         del st.session_state.solar_results
         st.rerun()
