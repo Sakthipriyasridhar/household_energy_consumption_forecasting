@@ -5,13 +5,13 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import numpy as np
 
-st.set_page_config(page_title="Dashboard", page_icon="🏠")
-st.title("🏠 Dashboard")
-st.markdown("### Your Energy Management Hub")
-
-# This page is redundant since main.py handles dashboard
-# Redirect to main
-st.info("You're already on the dashboard! Use the sidebar to navigate.")
+# Page Configuration
+st.set_page_config(
+    page_title="Energy Optimizer AI",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # Clean, Minimalist CSS
 def load_css():
@@ -72,11 +72,11 @@ def load_css():
             font-weight: 500;
         }
         
-        /* Quick action cards */
-        .quick-action-card {
+        /* Navigation cards */
+        .nav-card {
             background: white;
-            padding: 1.5rem;
-            border-radius: 12px;
+            padding: 2rem;
+            border-radius: 16px;
             border: 1px solid #e8e8e8;
             transition: all 0.3s ease;
             height: 100%;
@@ -84,29 +84,35 @@ def load_css():
             flex-direction: column;
             align-items: center;
             text-align: center;
+            cursor: pointer;
         }
         
-        .quick-action-card:hover {
-            transform: translateY(-4px);
+        .nav-card:hover {
+            transform: translateY(-6px);
             border-color: #2E86AB;
-            box-shadow: 0 8px 24px rgba(46, 134, 171, 0.12);
+            box-shadow: 0 12px 32px rgba(46, 134, 171, 0.15);
         }
         
-        .quick-action-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
+        .nav-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
             color: #2E86AB;
+            transition: all 0.3s ease;
         }
         
-        .quick-action-title {
-            font-size: 1.1rem;
-            font-weight: 600;
+        .nav-card:hover .nav-icon {
+            transform: scale(1.1);
+        }
+        
+        .nav-title {
+            font-size: 1.3rem;
+            font-weight: 700;
             color: #1a1a1a;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
         }
         
-        .quick-action-desc {
-            font-size: 0.9rem;
+        .nav-desc {
+            font-size: 0.95rem;
             color: #666;
             line-height: 1.5;
             margin-bottom: 1.5rem;
@@ -194,11 +200,31 @@ def load_css():
             background: white;
         }
         
-        /* Vertical layout for quick actions */
-        .vertical-actions-container {
+        /* Center align for navigation */
+        .center-container {
             display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
+            justify-content: center;
+        }
+        
+        /* Navigation grid */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        @media (max-width: 1200px) {
+            .nav-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .nav-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
     """
@@ -224,7 +250,7 @@ def main():
     
     # Sidebar Navigation
     with st.sidebar:
-        st.markdown('<div class="main-header" style="font-size: 1.8rem;">⚡</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size: 1.8rem; color: #2E86AB;">⚡</div>', unsafe_allow_html=True)
         st.markdown("### Energy Optimizer AI")
         st.caption("Intelligent Energy Management Platform")
         
@@ -292,14 +318,8 @@ def show_dashboard():
     """Clean, Professional Dashboard"""
     
     # Header Section
-    col_header1, col_header2 = st.columns([3, 1])
-    
-    with col_header1:
-        st.markdown('<div class="main-header">Energy Optimizer AI</div>', unsafe_allow_html=True)
-        st.markdown('<div class="sub-header">Machine Learning-Powered Energy Management & Optimization Platform</div>', unsafe_allow_html=True)
-    
-    with col_header2:
-        st.markdown(f"<div style='text-align: right; color: #666; font-size: 0.9rem;'>{datetime.now().strftime('%B %d, %Y')}</div>", unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Energy Optimizer AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Machine Learning-Powered Energy Management & Optimization Platform</div>', unsafe_allow_html=True)
     
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
@@ -335,41 +355,111 @@ def show_dashboard():
     
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
-    # Main Content Area - Split layout
-    main_col1, main_col2 = st.columns([1, 2])
+    # CENTERED NAVIGATION SECTION - Main Focus
+    st.markdown("### Navigation Center")
+    st.markdown("Select where you'd like to go:")
     
-    with main_col1:
-        # Vertical Quick Actions Section
-        st.markdown("### Quick Actions")
-        st.markdown("<div class='vertical-actions-container'>", unsafe_allow_html=True)
-        
-        quick_actions = [
-            {"icon": "📊", "title": "Upload Data", "desc": "Import historical consumption data", "page": "pages/data_loader.py"},
-            {"icon": "📋", "title": "Energy Survey", "desc": "Complete smart energy assessment", "page": "pages/survey.py"},
-            {"icon": "🤖", "title": "AI Forecast", "desc": "Generate 12-month predictions", "page": "pages/forecast.py"},
-            {"icon": "💡", "title": "Optimization", "desc": "Get personalized recommendations", "page": "pages/optimization.py"},
-            {"icon": "☀️", "title": "Solar Analysis", "desc": "Calculate solar ROI and savings", "page": "pages/solar.py"}
-        ]
-        
-        for action in quick_actions:
-            action_html = f"""
-            <div class="quick-action-card">
-                <div class="quick-action-icon">{action['icon']}</div>
-                <div class="quick-action-title">{action['title']}</div>
-                <div class="quick-action-desc">{action['desc']}</div>
+    # Create navigation cards in a centered grid
+    navigation_options = [
+        {
+            "icon": "📊", 
+            "title": "Data Upload", 
+            "desc": "Upload historical energy consumption data",
+            "page": "pages/data_loader.py"
+        },
+        {
+            "icon": "📋", 
+            "title": "Energy Survey", 
+            "desc": "Complete smart energy assessment questionnaire",
+            "page": "pages/survey.py"
+        },
+        {
+            "icon": "🤖", 
+            "title": "AI Forecast", 
+            "desc": "Generate 12-month AI-powered predictions",
+            "page": "pages/forecast.py"
+        },
+        {
+            "icon": "💡", 
+            "title": "Optimization", 
+            "desc": "Get personalized energy savings recommendations",
+            "page": "pages/optimization.py"
+        },
+        {
+            "icon": "☀️", 
+            "title": "Solar Analysis", 
+            "desc": "Calculate solar ROI and savings potential",
+            "page": "pages/solar.py"
+        },
+        {
+            "icon": "📈", 
+            "title": "Analytics", 
+            "desc": "View detailed energy consumption analytics",
+            "page": "#analytics"
+        }
+    ]
+    
+    # Create 3x2 grid for navigation cards
+    nav_rows = [navigation_options[i:i+3] for i in range(0, len(navigation_options), 3)]
+    
+    for row in nav_rows:
+        cols = st.columns(3)
+        for col_idx, nav_item in enumerate(row):
+            with cols[col_idx]:
+                nav_html = f"""
+                <div class="nav-card" onclick="this.nextElementSibling.click()">
+                    <div class="nav-icon">{nav_item['icon']}</div>
+                    <div class="nav-title">{nav_item['title']}</div>
+                    <div class="nav-desc">{nav_item['desc']}</div>
+                </div>
+                """
+                st.markdown(nav_html, unsafe_allow_html=True)
+                
+                # Hidden button for navigation
+                if nav_item['title'] == "Analytics":
+                    if st.button(f"Go to {nav_item['title']}", key=f"nav_{nav_item['title']}", use_container_width=True, type="secondary"):
+                        st.session_state.show_analytics = True
+                        st.rerun()
+                else:
+                    if st.button(f"Go to {nav_item['title']}", key=f"nav_{nav_item['title']}", use_container_width=True):
+                        st.switch_page(nav_item["page"])
+    
+    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
+    
+    # Getting Started Guide
+    st.markdown("### Getting Started Guide")
+    
+    steps = [
+        {"step": 1, "title": "Upload Data", "desc": "Import your historical energy consumption data", "icon": "📊"},
+        {"step": 2, "title": "Complete Survey", "desc": "Provide details about your appliances and usage patterns", "icon": "📋"},
+        {"step": 3, "title": "Generate Forecast", "desc": "Get AI-powered predictions for future consumption", "icon": "🤖"},
+        {"step": 4, "title": "Optimize", "desc": "Receive personalized recommendations for savings", "icon": "💡"}
+    ]
+    
+    step_cols = st.columns(4)
+    
+    for idx, step in enumerate(steps):
+        with step_cols[idx]:
+            step_html = f"""
+            <div style="text-align: center; padding: 1.5rem; border: 1px solid #e8e8e8; border-radius: 12px; height: 100%; background: white;">
+                <div style="background: #2E86AB; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-weight: bold;">
+                    {step['step']}
+                </div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">{step['icon']}</div>
+                <h4 style="margin: 0.5rem 0;">{step['title']}</h4>
+                <p style="color: #666; font-size: 0.9rem; margin: 0;">{step['desc']}</p>
             </div>
             """
-            st.markdown(action_html, unsafe_allow_html=True)
-            
-            # Action button below each card
-            if st.button(f"Go to {action['title']}", key=f"quick_{action['title']}", use_container_width=True):
-                st.switch_page(action["page"])
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(step_html, unsafe_allow_html=True)
     
-    with main_col2:
-        # Analytics Charts Section
-        st.markdown("### Analytics Dashboard")
+    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
+    
+    # "Ready to Optimize Your Energy Usage?" Section
+    st.markdown("### Ready to Optimize Your Energy Usage?")
+    
+    # ANALYTICS DASHBOARD - Only shown here
+    if st.session_state.get("show_analytics", False):
+        st.markdown("#### 📊 Analytics Dashboard")
         
         tab1, tab2, tab3 = st.tabs(["📈 Energy Trends", "💰 Cost Analysis", "🌍 Environmental Impact"])
         
@@ -500,45 +590,15 @@ def show_dashboard():
                 st.metric("Trees Equivalent", "595 trees")
             with env_col3:
                 st.metric("Cost Savings", "₹8,400", "Monthly")
-    
-    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
-    
-    # Getting Started Section
-    st.markdown("### Getting Started")
-    
-    steps = [
-        {"step": 1, "title": "Upload Data", "desc": "Import your historical energy consumption data", "icon": "📊"},
-        {"step": 2, "title": "Complete Survey", "desc": "Provide details about your appliances and usage patterns", "icon": "📋"},
-        {"step": 3, "title": "Generate Forecast", "desc": "Get AI-powered predictions for future consumption", "icon": "🤖"},
-        {"step": 4, "title": "Optimize", "desc": "Receive personalized recommendations for savings", "icon": "💡"}
-    ]
-    
-    step_cols = st.columns(4)
-    
-    for idx, step in enumerate(steps):
-        with step_cols[idx]:
-            step_html = f"""
-            <div style="text-align: center; padding: 1.5rem; border: 1px solid #e8e8e8; border-radius: 12px; height: 100%;">
-                <div style="background: #2E86AB; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-weight: bold;">
-                    {step['step']}
-                </div>
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">{step['icon']}</div>
-                <h4 style="margin: 0.5rem 0;">{step['title']}</h4>
-                <p style="color: #666; font-size: 0.9rem; margin: 0;">{step['desc']}</p>
-            </div>
-            """
-            st.markdown(step_html, unsafe_allow_html=True)
-    
-    st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
+        
+        st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
     # CTA Section
-    st.markdown("### Ready to Optimize Your Energy Usage?")
+    st.markdown("Start your journey towards smarter energy management and significant cost savings.")
     
     cta_col1, cta_col2, cta_col3 = st.columns([1, 2, 1])
     
     with cta_col2:
-        st.markdown("Start your journey towards smarter energy management and significant cost savings.")
-        
         col_start, col_learn = st.columns(2)
         
         with col_start:
@@ -574,5 +634,5 @@ def show_dashboard():
         st.caption("**Privacy:** Your data is secure with us")
         st.caption("**Open Source:** Available on GitHub")
 
-if __name__ == "__dashboard__":
-    dashboard()
+if __name__ == "__main__":
+    main()
