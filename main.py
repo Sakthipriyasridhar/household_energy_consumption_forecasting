@@ -253,8 +253,9 @@ def main():
     
     with footer_cols[2]:
         st.caption("**Privacy:** Secure")
-        st.caption("**Open Source:**")
-    
+        github_url = "https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting"
+        st.markdown(f"[**Open Source:** GitHub]({github_url})")
+ 
     st.markdown('</div>', unsafe_allow_html=True)
     
     # Close main container
