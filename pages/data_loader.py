@@ -82,6 +82,10 @@ st.markdown("""
         font-size: 1.3rem;
         margin-right: 0.5rem;
     }
+    /* Hide survey data when not in use */
+    .hidden-tab-content {
+        display: none;
+    }
 </style>
 """, unsafe_allow_html=True)
 
