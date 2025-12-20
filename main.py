@@ -254,7 +254,7 @@ def main():
     with footer_cols[2]:
         st.caption("**Privacy:** Secure")
         github_url = "https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting"
-        st.markdown(f"[**Open Source:** GitHub]({github_url})")
+        st.caption(f"[**Open Source:** GitHub]({github_url})")
  
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -263,5 +263,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
