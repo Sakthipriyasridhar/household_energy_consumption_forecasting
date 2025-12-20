@@ -275,9 +275,10 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
-    div:contains("Data loaded"),
-    div:contains("forecast_data"),
-    div:contains("No data found") {
+    div[data-testid="stSuccess"], 
+    div[data-testid="stInfo"],
+    div[data-testid="stWarning"],
+    div[data-testid="stError"] {
         display: none !important;
     } 
 });
@@ -1450,6 +1451,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
