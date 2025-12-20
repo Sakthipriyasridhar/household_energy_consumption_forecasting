@@ -275,6 +275,12 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
+    // Hide all elements containing "Data loaded"
+    document.querySelectorAll('*').forEach(el => {
+    if (el.textContent.includes('Data loaded')) {
+    el.style.display = 'none';
+    }  
+});
 </style>
 """, unsafe_allow_html=True)
 
@@ -1444,5 +1450,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
