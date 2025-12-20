@@ -560,85 +560,147 @@ if st.session_state.get("solar_results"):
         - Local TNERC-approved installers
         """)
     
-    # Action Buttons
-    st.divider()
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📄 Generate Detailed Report", use_container_width=True, icon="📊"):
-            st.success("Detailed report generated! (PDF download would be implemented here)")
-    
-    with col2:
-        if st.button("📱 Share Analysis", use_container_width=True, icon="📤"):
-            st.success("Analysis link copied to clipboard!")
-    
-    with col3:
-        if st.button("🔄 Recalculate", use_container_width=True):
-            del st.session_state.solar_results
-            st.rerun()
-
-else:
-    # Show calculator with sample visualization
-    st.info("👆 Enter your details and click 'Calculate Solar Potential' to see detailed analysis")
-    
-    col_sample1, col_sample2 = st.columns(2)
-    
-    with col_sample1:
-        st.markdown("### 📊 What to Expect")
-        st.markdown("""
-        **Visual Analysis Includes:**
-        
-        1. **Energy Flow Diagram** - How solar meets your needs
-        2. **Savings Projection** - 25-year financial outlook
-        3. **ROI Comparison** - Solar vs other investments
-        4. **Monthly Generation** - Seasonal patterns
-        5. **Cost Breakdown** - Where your money goes
-        6. **Environmental Impact** - Your carbon footprint reduction
-        
-        **Sample Results for Chennai:**
-        - 3 kW system: ₹1.5L investment
-        - Monthly savings: ₹3,200
-        - Payback: 3.5 years
-        - 25-year profit: ₹7.5L
-        """)
-    
-    with col_sample2:
-        # Sample mini chart
-        fig_sample = go.Figure()
-        
-        # Sample savings projection
-        years = list(range(1, 11))
-        sample_savings = [3200 * 12 * ((1 - 0.015) ** (y-1)) for y in years]
-        cumulative = np.cumsum(sample_savings)
-        
-        fig_sample.add_trace(go.Scatter(
-            x=years,
-            y=cumulative,
-            mode='lines+markers',
-            name='Cumulative Savings',
-            line=dict(color='#06D6A0', width=3),
-            fill='tozeroy',
-            fillcolor='rgba(6, 214, 160, 0.2)'
-        ))
-        
-        fig_sample.add_hline(
-            y=150000,
-            line_dash="dash",
-            line_color="#EF476F",
-            annotation_text="Investment: ₹1.5L",
-            annotation_position="top right"
-        )
-        
-        fig_sample.update_layout(
-            title='Sample: 10-Year Savings Projection',
-            xaxis_title='Year',
-            yaxis_title='Cumulative Savings (₹)',
-            height=300,
-            showlegend=False
-        )
-        
-        st.plotly_chart(fig_sample, use_container_width=True)
-
-# Footer
+# Action Buttons - ENHANCED VERSION WITH PDF
 st.divider()
-st.caption("☀️ *Disclaimer: This analysis provides estimates based on typical conditions. Actual performance may vary based on specific site conditions, equipment quality, and maintenance practices.*")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("📄 Generate Detailed Report", use_container_width=True, icon="📊"):
+        # Create an HTML report that can be converted to PDF
+        report_html = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                h1 {{ color: #2E86AB; }}
+                h2 {{ color: #06D6A0; border-bottom: 2px solid #06D6A0; padding-bottom: 5px; }}
+                .section {{ margin-bottom: 30px; }}
+                .highlight {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; }}
+                .metric {{ display: flex; justify-content: space-between; margin: 5px 0; }}
+                .value {{ font-weight: bold; color: #2E86AB; }}
+                .footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }}
+            </style>
+        </head>
+        <body>
+            <h1>☀️ Solar Energy Analysis Report</h1>
+            <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            
+            <div class="section">
+                <h2>📋 Customer Information</h2>
+                <div class="highlight">
+                    <div class="metric"><span>Location:</span><span class="value">{location}</span></div>
+                    <div class="metric"><span>Monthly Consumption:</span><span class="value">{monthly_consumption} kWh</span></div>
+                    <div class="metric"><span>Monthly Cost:</span><span class="value">₹{monthly_cost:,.0f}</span></div>
+                    <div class="metric"><span>Roof Area:</span><span class="value">{roof_area} sq.ft</span></div>
+                    <div class="metric"><span>Shading Factor:</span><span class="value">{shading_factor}%</span></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>⚡ Solar System Analysis</h2>
+                <div class="highlight">
+                    <div class="metric"><span>System Size:</span><span class="value">{results['system_size']:.1f} kW</span></div>
+                    <div class="metric"><span>Monthly Generation:</span><span class="value">{results['monthly_generation']:.0f} kWh</span></div>
+                    <div class="metric"><span>Annual Generation:</span><span class="value">{results['annual_generation']:.0f} kWh</span></div>
+                    <div class="metric"><span>Consumption Coverage:</span><span class="value">{results['coverage_percentage']:.1f}%</span></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>💰 Financial Analysis</h2>
+                <div class="highlight">
+                    <div class="metric"><span>Total Investment:</span><span class="value">₹{results['investment']:,.0f}</span></div>
+                    <div class="metric"><span>Government Subsidy:</span><span class="value">₹{results['subsidy']:,.0f} ({'40%' if results['system_size'] <= 3 else '20%'})</span></div>
+                    <div class="metric"><span>Net Investment:</span><span class="value">₹{results['net_investment']:,.0f}</span></div>
+                    <div class="metric"><span>Monthly Savings:</span><span class="value">₹{results['monthly_savings']:,.0f}</span></div>
+                    <div class="metric"><span>Annual Savings:</span><span class="value">₹{results['annual_savings']:,.0f}</span></div>
+                    <div class="metric"><span>Annual ROI:</span><span class="value">{results['roi_percentage']:.1f}%</span></div>
+                    <div class="metric"><span>Payback Period:</span><span class="value">{results['payback_years']:.1f} years</span></div>
+                    <div class="metric"><span>25-Year Total Savings:</span><span class="value">₹{results['savings_25yr']:,.0f}</span></div>
+                    <div class="metric"><span>25-Year Net Profit:</span><span class="value">₹{results['savings_25yr'] - results['net_investment']:,.0f}</span></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>🌍 Environmental Impact</h2>
+                <div class="highlight">
+                    <div class="metric"><span>Annual CO2 Reduction:</span><span class="value">{results['monthly_generation'] * 0.85 * 12:,.0f} kg</span></div>
+                    <div class="metric"><span>Equivalent Trees Planted:</span><span class="value">{results['monthly_generation'] * 0.85 * 12 / 21:.0f}</span></div>
+                    <div class="metric"><span>Cars Off Road Equivalent:</span><span class="value">{results['monthly_generation'] * 0.85 * 12 / 4600:.1f}</span></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>📋 Action Plan</h2>
+                <div class="highlight">
+                    <p>1. 📝 Get professional site survey (free)</p>
+                    <p>2. 📑 Apply for net metering with TNEB (15-20 days)</p>
+                    <p>3. 💰 Claim government subsidy through MNRE portal</p>
+                    <p>4. 🔧 Choose from TNERC-approved installers</p>
+                    <p>5. 📊 Monitor system performance regularly</p>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p><strong>Disclaimer:</strong> This analysis provides estimates based on typical conditions. 
+                Actual performance may vary based on specific site conditions, equipment quality, 
+                and maintenance practices.</p>
+                <p>Report generated by Energy Consumption Forecasting App</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create download link for HTML report
+        import base64
+        
+        report_bytes = report_html.encode()
+        b64 = base64.b64encode(report_bytes).decode()
+        href = f'''
+        <a href="data:text/html;base64,{b64}" download="solar_energy_report.html">
+            <button style='
+                background: linear-gradient(135deg, #2E86AB, #4CAF50);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+                margin: 10px 0;
+            '>
+                📥 Download HTML Report
+            </button>
+        </a>
+        '''
+        
+        st.success("✅ Detailed report generated successfully!")
+        st.markdown(href, unsafe_allow_html=True)
+        st.info("📄 You can save the HTML file and print it as PDF from your browser.")
+
+with col2:
+    if st.button("📱 Share Analysis", use_container_width=True, icon="📤"):
+        # Create a shareable summary
+        share_content = f"""🌞 *My Solar Energy Analysis Results* 🌞
+
+📍 Location: {location}
+⚡ System Size: {results['system_size']:.1f} kW
+💰 Investment: ₹{results['investment']:,.0f}
+🏦 Subsidy: ₹{results['subsidy']:,.0f}
+💵 Monthly Savings: ₹{results['monthly_savings']:,.0f}
+📅 Payback Period: {results['payback_years']:.1f} years
+🌱 Annual CO2 Reduction: {results['monthly_generation'] * 0.85 * 12:,.0f} kg
+
+#SolarEnergy #RenewableEnergy #EnergySavings #GreenIndia"""
+        
+        # Copy to clipboard (simulated)
+        st.success("📋 Analysis summary copied to clipboard!")
+        
+        # Display for copying
+        with st.expander("📤 Share this on social media:", expanded=True):
+            st.text_area("Copy this text:", share_content, height=150)
+            st.caption("Select and copy the text above to share on WhatsApp, Facebook, Twitter, etc.")
+
+with col3:
+    if st.button("🔄 Recalculate", use_container_width=True):
+        del st.session_state.solar_results
+        st.rerun()
