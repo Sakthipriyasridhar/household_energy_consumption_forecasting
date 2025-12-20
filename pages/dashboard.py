@@ -355,7 +355,7 @@ def show_dashboard():
         
     ]
     
-    step_cols = st.columns(4)
+    step_cols = st.columns(5)
     
     for idx, step in enumerate(steps):
         with step_cols[idx]:
