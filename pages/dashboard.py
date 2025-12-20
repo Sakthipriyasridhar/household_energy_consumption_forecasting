@@ -606,11 +606,11 @@ def show_dashboard():
             st.switch_page("pages/survey.py")
     with col_learn:
         github_url = "https://github.com/Sakthipriyasridhar/household_energy_consumption_forecasting"
-            st.link_button("📚 View on GitHub", 
-                   github_url, 
-                   type="primary", 
-                   use_container_width=True)
-          
+        st.link_button("📚 View on GitHub", 
+                       github_url,
+                       type="primary",
+                       use_container_width=True)
+                     
     # Footer
     st.markdown("<div class='custom-divider'></div>", unsafe_allow_html=True)
     
