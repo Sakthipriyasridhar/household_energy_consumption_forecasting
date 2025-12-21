@@ -1,3 +1,5 @@
+is there any way to remove those white empty boxes 
+Here is the code:
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -438,11 +440,12 @@ def load_data_from_data_loader():
             if (source in st.session_state and 
                 st.session_state[source] is not None and 
                 len(st.session_state[source]) > 0):
-                st.success(f"✅ Data loaded ({source}: {len(data)} rows)")
+                
                 data = st.session_state[source].copy()
+                st.success(f"✅ Data loaded ({source}: {len(data)} rows)")
                 return data
-        # Generate sample data if none found
         
+        # Generate sample data if none found
         st.info("No data found from Data Loader. Using sample data for demonstration.")
         
         dates = pd.date_range(start='2022-01-01', periods=730, freq='D')
@@ -1435,7 +1438,7 @@ def main():
             st.session_state.X_train = X_train_scaled
             st.session_state.y_train = y_train
             st.session_state.train_dates = train_dates
-
+            
             st.success(f"✅ Successfully trained {len(results)} models!")
             st.session_state.train_models = False  # Reset training flag
     
@@ -1450,11 +1453,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
