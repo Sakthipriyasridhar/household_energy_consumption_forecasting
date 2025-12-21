@@ -28,9 +28,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Professional Dashboard
-# Replace your existing Streamlit tabs CSS (around line 172-180) with this:
-
 st.markdown("""
 <style>
     /* BIGGER, MORE PROMINENT TABS */
@@ -93,20 +90,6 @@ st.markdown("""
         vertical-align: middle;
     }
     
-    /* Rest of your existing CSS below... keep all your other CSS styles */
-    .main {
-        padding: 20px;
-    }
-    
-    .dashboard-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        margin: 15px 0;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        border: 1px solid #e0e0e0;
-        transition: transform 0.2s;
-
     /* Main container */
     .main {
         padding: 20px;
@@ -232,27 +215,6 @@ st.markdown("""
         background: linear-gradient(135deg, #FFECB3, #FF980020);
     }
     
-    /* Streamlit tabs customization */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 8px 8px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        font-weight: 600;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #1E88E5;
-        color: white;
-    }
-    
     /* Individual algorithm cards */
     .algo-detail-card {
         background: #f8f9fa;
@@ -277,13 +239,15 @@ st.markdown("""
         padding: 15px;
         margin: 10px 0;
     }
+    
+    /* Hide Streamlit status messages completely */
+    div[data-testid="stAlert"],
     div[data-testid="stSuccess"], 
     div[data-testid="stInfo"],
     div[data-testid="stWarning"],
     div[data-testid="stError"] {
         display: none !important;
-    } 
-
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1453,4 +1417,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
