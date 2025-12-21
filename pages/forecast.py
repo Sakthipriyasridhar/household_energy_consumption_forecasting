@@ -283,7 +283,7 @@ st.markdown("""
     div[data-testid="stError"] {
         display: none !important;
     } 
-});
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1453,3 +1453,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
