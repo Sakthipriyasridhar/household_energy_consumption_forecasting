@@ -438,10 +438,12 @@ def load_data_from_data_loader():
             if (source in st.session_state and 
                 st.session_state[source] is not None and 
                 len(st.session_state[source]) > 0):
-                
+                st.success(f"✅ Data loaded ({source}: {len(data)} rows)")
                 data = st.session_state[source].copy()
                 return data
+        # Generate sample data if none found
         
+        st.info("No data found from Data Loader. Using sample data for demonstration.")
         
         dates = pd.date_range(start='2022-01-01', periods=730, freq='D')
         
@@ -468,6 +470,7 @@ def load_data_from_data_loader():
         return data
         
     except Exception as e:
+        st.error(f"Error loading data from Data Loader: {str(e)}")
         dates = pd.date_range(start='2022-01-01', periods=100, freq='D')
         energy = np.random.normal(30, 5, 100)
         data = pd.DataFrame({
@@ -1432,7 +1435,8 @@ def main():
             st.session_state.X_train = X_train_scaled
             st.session_state.y_train = y_train
             st.session_state.train_dates = train_dates
-            
+
+            st.success(f"✅ Successfully trained {len(results)} models!")
             st.session_state.train_models = False  # Reset training flag
     
     # ========== CREATE TABS ==========
@@ -1446,6 +1450,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
